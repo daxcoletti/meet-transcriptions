@@ -103,6 +103,7 @@ Con esto, cron lanza una instancia por minuto. Si todavía está corriendo la an
 Para `Reunion 2026-04-28.mkv` se genera:
 
 - `transcriptions/Reunion 2026-04-28.vtt` — formato WebVTT
+- `Minutas/Reunion 2026-04-28.md` — placeholder vacío para escribir la minuta a mano
 - el archivo original se mueve a `procesados/`
 - el nombre queda registrado en `done_transcriptions.txt`
 

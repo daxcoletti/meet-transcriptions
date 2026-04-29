@@ -18,6 +18,7 @@ BASE_PATH = Path("/home/dax/dev/meet-transcriptions")
 AUDIOS_DIR = Path("/home/dax/Audios")
 TRANSCRIPTIONS_DIR = AUDIOS_DIR / "transcriptions"
 PROCESSED_DIR = AUDIOS_DIR / "procesados"
+MINUTAS_DIR = AUDIOS_DIR / "Minutas"
 LOG_FILE = AUDIOS_DIR / "done_transcriptions.txt"
 
 # Colores para la terminal
@@ -35,7 +36,7 @@ GLADIA_API_KEY = load_key("gladia")
 DEEPGRAM_API_KEY = load_key("deepgram")
 
 # Asegurar que existan las carpetas
-for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR]: d.mkdir(parents=True, exist_ok=True)
+for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR]: d.mkdir(parents=True, exist_ok=True)
 
 def split_audio(file_path):
     """Divide el audio en segmentos de 10 min para evitar límites de tamaño de las APIs."""
@@ -135,6 +136,8 @@ def process_file(file_path):
         out_vtt.write_text("WEBVTT\n\n" + "\n".join(full_transcript))
         # Mover original para no repetir
         os.rename(file_path, PROCESSED_DIR / file_path.name)
+        # Crear minuta vacía (placeholder para que el usuario complete a mano)
+        (MINUTAS_DIR / f"{file_path.stem}.md").touch()
         with open(LOG_FILE, "a") as log: log.write(f"{file_path.name}\n")
         print(f"{GREEN}✅ Transcripción completada.{RESET}")
     else:
