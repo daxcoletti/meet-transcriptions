@@ -1,11 +1,9 @@
 #!/bin/bash
+# Wrapper para cron. La redirección de stdout/stderr al log la maneja
+# quien invoca este script (ver /etc/cron.d/transcripcion_audios).
+# Si lo corrés a mano, vas a ver la salida en la terminal.
 PROJECT_DIR="/home/dax/dev/meet-transcriptions"
 
-# Activar el entorno virtual
 source "$PROJECT_DIR/venv/bin/activate"
-
-# Ejecutar el script (usamos la ruta completa del log para debug)
-python "$PROJECT_DIR/super_transcriptor_v2.py" >> "/home/dax/Audios/cron_log.log" 2>&1
-
-# Salir del entorno
+python "$PROJECT_DIR/super_transcriptor_v2.py"
 deactivate
