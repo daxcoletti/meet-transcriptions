@@ -1,0 +1,29 @@
+# API keys (NUNCA subir)
+*.key
+
+# Entorno virtual
+venv/
+.venv/
+
+# Logs
+*.log
+transcripcion.log
+cron_log.log
+
+# Audios y transcripciones (datos del usuario)
+Audios/
+audios/
+transcriptions/
+procesados/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
