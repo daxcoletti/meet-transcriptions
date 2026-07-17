@@ -27,3 +27,10 @@ __pycache__/
 *.swp
 *~
 .DS_Store
+
+# Backups locales
+*.bak
+*.pre-*
+
+# Herramientas
+.kimi/
