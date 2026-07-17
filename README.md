@@ -6,8 +6,8 @@ Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) q
 
 1. Escanea un directorio de audios (`/home/dax/Audios` por defecto).
 2. Por cada archivo nuevo, extrae el audio con `ffmpeg` y lo divide en segmentos de 10 minutos (límite típico de las APIs gratuitas).
-3. **Transcripción con diarización**: intenta cada segmento con **Deepgram** (`nova-3`) y, si falla, **Gladia**. Devuelve *utterances* con hablante y timestamps.
-4. **Fallback sin diarización**: si ningún proveedor de diarización está disponible o falla, cae a texto plano probando en orden **Groq** (`whisper-large-v3`) → **Gladia** → **Deepgram**. Ante un `429 (rate limit)` salta al siguiente.
+3. **Transcripción con diarización**: intenta cada segmento con **Deepgram** (`nova-3`) y, si falla, **Gladia** y luego **AssemblyAI**. Devuelve *utterances* con hablante y timestamps.
+4. **Fallback sin diarización**: si ningún proveedor de diarización está disponible o falla, cae a texto plano probando en orden **Groq** (`whisper-large-v3`) → **Gladia** → **Deepgram** → **AssemblyAI**. Ante un `429 (rate limit)` salta al siguiente.
 5. Une los segmentos y escribe la salida en `transcriptions/`:
    - `.vtt` (WebVTT, con hablantes si hubo diarización)
    - `.txt` (texto plano con timestamps)
@@ -41,6 +41,7 @@ El script se ejecuta cada minuto vía cron. Para evitar que dos instancias proce
   - [Groq](https://console.groq.com/) (transcripción Whisper + LLM para la minuta)
   - [Gladia](https://www.gladia.io/) (transcripción + diarización)
   - [Deepgram](https://console.deepgram.com/) (transcripción + diarización)
+  - [AssemblyAI](https://www.assemblyai.com/) (transcripción + diarización)
 
 ## Instalación
 
@@ -58,12 +59,13 @@ pip install requests tqdm langdetect
 1. **API keys**: cada proveedor lee su key desde un archivo en la raíz del repo (que está en `.gitignore`):
 
    ```bash
-   echo "tu-groq-api-key"     > groq.key
-   echo "tu-gladia-api-key"   > gladia.key
-   echo "tu-deepgram-api-key" > deepgram.key
+   echo "tu-groq-api-key"       > groq.key
+   echo "tu-gladia-api-key"     > gladia.key
+   echo "tu-deepgram-api-key"   > deepgram.key
+   echo "tu-assemblyai-api-key" > assemblyai.key
    ```
 
-   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La minuta requiere `groq.key`. La diarización requiere `deepgram.key` o `gladia.key`.
+   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La minuta requiere `groq.key`. La diarización requiere `deepgram.key`, `gladia.key` o `assemblyai.key`.
 
 2. **Rutas** (editar al inicio de `super_transcriptor_v2.py` si querés otras):
 

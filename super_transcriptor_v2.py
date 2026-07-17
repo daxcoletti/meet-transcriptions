@@ -45,6 +45,7 @@ def load_key(provider):
 GROQ_API_KEY = load_key("groq")
 GLADIA_API_KEY = load_key("gladia")
 DEEPGRAM_API_KEY = load_key("deepgram")
+ASSEMBLYAI_API_KEY = load_key("assemblyai")
 
 # Asegurar que existan las carpetas
 for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR]:
@@ -201,6 +202,68 @@ def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
                 return None
 
             return alternatives.get("transcript")
+
+        elif provider == "assemblyai":
+            headers = {"authorization": ASSEMBLYAI_API_KEY}
+
+            # Paso 1: subir el audio a /v2/upload
+            with open(file_path, "rb") as f:
+                up = requests.post(
+                    "https://api.assemblyai.com/v2/upload",
+                    headers=headers,
+                    data=f,
+                    timeout=120,
+                )
+            if up.status_code != 200:
+                return None
+            audio_url = up.json().get("upload_url")
+            if not audio_url:
+                return None
+
+            # Paso 2: lanzar el job de transcripción
+            body = {
+                "audio_url": audio_url,
+                "language_detection": True,  # ES/EN/etc. automático
+            }
+            if diarize:
+                body["speaker_labels"] = True
+            res = requests.post(
+                "https://api.assemblyai.com/v2/transcript",
+                headers={**headers, "content-type": "application/json"},
+                json=body,
+                timeout=60,
+            )
+            if res.status_code not in (200, 201):
+                return None
+            tid = res.json().get("id")
+            if not tid:
+                return None
+
+            # Paso 3: poll del resultado (start/end vienen en milisegundos)
+            poll_url = f"https://api.assemblyai.com/v2/transcript/{tid}"
+            for _ in range(180):
+                poll = requests.get(poll_url, headers=headers, timeout=30).json()
+                status = poll.get("status")
+                if status == "completed":
+                    if diarize:
+                        utterances = poll.get("utterances") or []
+                        if not utterances:
+                            return None
+                        return [
+                            {
+                                "speaker": u.get("speaker", 0),
+                                "start": round(u["start"] / 1000 + offset_sec, 3),
+                                "end": round(u["end"] / 1000 + offset_sec, 3),
+                                "text": u.get("text", "").strip(),
+                            }
+                            for u in utterances
+                            if u.get("text", "").strip()
+                        ]
+                    return poll.get("text")
+                if status == "error":
+                    return None
+                time.sleep(2)
+            return None
 
     except Exception:
         return None
@@ -509,6 +572,7 @@ def process_file(file_path):
         ("groq", GROQ_API_KEY),
         ("gladia", GLADIA_API_KEY),
         ("deepgram", DEEPGRAM_API_KEY),
+        ("assemblyai", ASSEMBLYAI_API_KEY),
     ]
 
     if HAS_TQDM:
@@ -522,6 +586,8 @@ def process_file(file_path):
         diarization_providers.append("deepgram")
     if GLADIA_API_KEY:
         diarization_providers.append("gladia")
+    if ASSEMBLYAI_API_KEY:
+        diarization_providers.append("assemblyai")
 
     all_utterances = []
     diarization_ok = bool(diarization_providers)
