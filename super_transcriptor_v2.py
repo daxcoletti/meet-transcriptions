@@ -48,6 +48,7 @@ DEEPGRAM_API_KEY = load_key("deepgram")
 ASSEMBLYAI_API_KEY = load_key("assemblyai")
 ELEVENLABS_API_KEY = load_key("elevenlabs")
 SPEECHMATICS_API_KEY = load_key("speechmatics")
+GEMINI_API_KEY = load_key("gemini")
 
 # Speechmatics no hace code-switching: transcribe con un idioma fijo por job.
 # Cambiar a "es" si las reuniones son mayormente en español.
@@ -630,8 +631,8 @@ def _map_condense(text, lang):
     return "\n\n".join(out)
 
 
-def _build_minuta(content, filename, lang, model, from_summaries=False):
-    """REDUCE / pasada única: arma la minuta final en Markdown."""
+def _minuta_prompt(content, filename, lang, from_summaries=False):
+    """Construye (system_msg, user_msg) para la minuta. Reusado por Groq y Gemini."""
     system_msg = (
         "You are an expert assistant at writing clear, concise, and "
         "professional meeting minutes. Extract only relevant information: "
@@ -671,6 +672,12 @@ def _build_minuta(content, filename, lang, model, from_summaries=False):
         "---\n"
         f"Content:\n{content}"
     )
+    return system_msg, user_msg
+
+
+def _build_minuta(content, filename, lang, model, from_summaries=False):
+    """REDUCE / pasada única con Groq: arma la minuta final en Markdown."""
+    system_msg, user_msg = _minuta_prompt(content, filename, lang, from_summaries)
     return _groq_chat(
         [{"role": "system", "content": system_msg},
          {"role": "user", "content": user_msg}],
@@ -678,20 +685,74 @@ def _build_minuta(content, filename, lang, model, from_summaries=False):
     )
 
 
-def generate_minuta(transcript_text, filename):
-    """Genera una minuta en Markdown desde el transcript, usando map-reduce.
+# Gemini 2.5 Flash acepta 1M tokens de contexto: el transcript completo entra
+# en una sola llamada, sin necesidad de map-reduce.
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+)
 
-    1) MAP: parte el transcript en trozos y condensa cada uno con un LLM,
-       rotando entre varios modelos para repartir el cupo TPM del free tier.
-    2) REDUCE: junta los resúmenes (mucho más chicos) y arma la minuta final
-       en una sola llamada a un modelo fuerte; si los resúmenes siguen siendo
+
+def _gemini_minuta(content, filename, lang):
+    """Arma la minuta en una sola llamada a Gemini (aprovecha el contexto de 1M)."""
+    if not GEMINI_API_KEY:
+        return None
+    system_msg, user_msg = _minuta_prompt(content, filename, lang)
+    headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
+    body = {
+        "system_instruction": {"parts": [{"text": system_msg}]},
+        "contents": [{"parts": [{"text": user_msg}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 8192,
+            # Desactivar "thinking": la minuta es extracción, no razonamiento, y
+            # así garantizamos que el presupuesto de salida se use en la respuesta.
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
+    }
+    try:
+        res = requests.post(GEMINI_URL, headers=headers, json=body, timeout=180)
+        if res.status_code != 200:
+            print(f"{RED}❌ Gemini error {res.status_code}: {res.text[:200]}{RESET}")
+            return None
+        cands = res.json().get("candidates") or []
+        if not cands:
+            return None
+        parts = cands[0].get("content", {}).get("parts") or []
+        text = "".join(p.get("text", "") for p in parts).strip()
+        return text or None
+    except Exception as e:
+        print(f"{RED}❌ Gemini excepción: {e}{RESET}")
+        return None
+
+
+def generate_minuta(transcript_text, filename):
+    """Genera una minuta en Markdown desde el transcript.
+
+    Estrategia:
+    0) Si hay GEMINI_API_KEY: una sola llamada a Gemini (1M de contexto, sin
+       chunking). Si funciona, listo.
+    1) Fallback Groq map-reduce — MAP: parte el transcript en trozos y condensa
+       cada uno rotando modelos para repartir el cupo TPM del free tier.
+    2) REDUCE: junta los resúmenes y arma la minuta final; si siguen siendo
        grandes, condensa de nuevo (reduce jerárquico).
     Para transcripts cortos hace una sola pasada directa.
     """
-    if not GROQ_API_KEY or not transcript_text.strip():
+    if not transcript_text.strip():
         return None
 
     detected_lang = _detect_lang(transcript_text)
+
+    # 0) Gemini primero: el transcript completo entra en una sola llamada.
+    if GEMINI_API_KEY:
+        m = _gemini_minuta(transcript_text, filename, detected_lang)
+        if m:
+            return m
+        print(f"{YELLOW}⚠️  Gemini no disponible, caigo a Groq map-reduce.{RESET}")
+
+    if not GROQ_API_KEY:
+        return None
+
     chunks = _chunk_text(transcript_text, MAP_CHUNK_CHARS)
 
     if len(chunks) == 1:

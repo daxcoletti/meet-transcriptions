@@ -15,13 +15,13 @@ Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) q
 6. Genera una **minuta** en Markdown en `Minutas/` (ver abajo).
 7. Mueve el original a `procesados/` y registra el nombre en `done_transcriptions.txt` para no repetir.
 
-### Minuta con estrategia map-reduce
+### Minuta: Gemini (primario) + Groq map-reduce (fallback)
 
-La minuta se genera con los modelos de chat de **Groq**. Como el free tier tiene un límite de **tokens por minuto (TPM)** bajo (p.ej. 12.000 para `llama-3.3-70b-versatile`), mandar el transcript completo en una sola llamada fallaba con `413 Request too large` en cualquier reunión de más de ~30 min. Para resolverlo se usa **map-reduce**:
-
-- **MAP**: el transcript se parte en trozos (~10k chars) y cada uno se condensa con un LLM, **rotando entre varios modelos** (`gpt-oss-120b`, `llama-4-scout`, `qwen3-32b`, `llama-3.3-70b`) para repartir el cupo TPM (cada modelo tiene su propio límite). Los `429` se reintentan respetando el `retry-after`.
-- **REDUCE**: se juntan los resúmenes (mucho más chicos) y se arma la minuta final en una sola llamada a un modelo fuerte. Si los resúmenes juntos todavía no entran, se condensan de nuevo (reduce jerárquico).
-- Transcripts cortos → una sola pasada directa.
+- **Gemini 2.5 Flash (primario)**: si hay `gemini.key`, la minuta se genera en **una sola llamada** aprovechando su contexto de **1M tokens** — el transcript completo entra sin chunking, sin límites de TPM. Es el camino preferido (más simple y de mayor calidad).
+- **Groq map-reduce (fallback)**: si no hay `gemini.key` o Gemini falla, se cae a Groq. Como su free tier tiene un límite de **tokens por minuto (TPM)** bajo (p.ej. 12.000 para `llama-3.3-70b-versatile`), mandar el transcript completo en una sola llamada fallaba con `413 Request too large` en reuniones de más de ~30 min. Para resolverlo se usa **map-reduce**:
+  - **MAP**: el transcript se parte en trozos (~10k chars) y cada uno se condensa con un LLM, **rotando entre varios modelos** (`gpt-oss-120b`, `llama-4-scout`, `qwen3-32b`, `llama-3.3-70b`) para repartir el cupo TPM (cada modelo tiene su propio límite). Los `429` se reintentan respetando el `retry-after`.
+  - **REDUCE**: se juntan los resúmenes (mucho más chicos) y se arma la minuta final en una sola llamada a un modelo fuerte. Si los resúmenes juntos todavía no entran, se condensan de nuevo (reduce jerárquico).
+  - Transcripts cortos → una sola pasada directa.
 
 El idioma de la minuta se detecta automáticamente con `langdetect`.
 
@@ -44,6 +44,7 @@ El script se ejecuta cada minuto vía cron. Para evitar que dos instancias proce
   - [AssemblyAI](https://www.assemblyai.com/) (transcripción + diarización)
   - [ElevenLabs](https://elevenlabs.io/) (Scribe — transcripción + diarización)
   - [Speechmatics](https://www.speechmatics.com/) (transcripción + diarización; idioma fijo por job, ver `SPEECHMATICS_LANG`)
+- Opcional para la minuta: [Google Gemini](https://aistudio.google.com/) (1M de contexto; primario si está presente)
 
 ## Instalación
 
@@ -67,9 +68,10 @@ pip install requests tqdm langdetect
    echo "tu-assemblyai-api-key"   > assemblyai.key
    echo "tu-elevenlabs-api-key"   > elevenlabs.key
    echo "tu-speechmatics-api-key" > speechmatics.key
+   echo "tu-gemini-api-key"       > gemini.key
    ```
 
-   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La minuta requiere `groq.key`. La diarización requiere `deepgram.key`, `gladia.key`, `assemblyai.key`, `elevenlabs.key` o `speechmatics.key`.
+   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La diarización requiere `deepgram.key`, `gladia.key`, `assemblyai.key`, `elevenlabs.key` o `speechmatics.key`. La minuta usa `gemini.key` si está (primario) y si no `groq.key` (map-reduce).
 
 2. **Rutas** (editar al inicio de `super_transcriptor_v2.py` si querés otras):
 
