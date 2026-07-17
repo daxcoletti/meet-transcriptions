@@ -47,6 +47,11 @@ GLADIA_API_KEY = load_key("gladia")
 DEEPGRAM_API_KEY = load_key("deepgram")
 ASSEMBLYAI_API_KEY = load_key("assemblyai")
 ELEVENLABS_API_KEY = load_key("elevenlabs")
+SPEECHMATICS_API_KEY = load_key("speechmatics")
+
+# Speechmatics no hace code-switching: transcribe con un idioma fijo por job.
+# Cambiar a "es" si las reuniones son mayormente en español.
+SPEECHMATICS_LANG = "en"
 
 # Asegurar que existan las carpetas
 for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR]:
@@ -324,6 +329,99 @@ def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
                     if u["text"].strip()
                 ]
             return payload.get("text")
+
+        elif provider == "speechmatics":
+            headers = {"Authorization": f"Bearer {SPEECHMATICS_API_KEY}"}
+            config = {
+                "type": "transcription",
+                "transcription_config": {
+                    "language": SPEECHMATICS_LANG,
+                    "operating_point": "enhanced",
+                },
+            }
+            if diarize:
+                config["transcription_config"]["diarization"] = "speaker"
+
+            # Paso 1: enviar el job
+            with open(file_path, "rb") as f:
+                sub = requests.post(
+                    "https://asr.api.speechmatics.com/v2/jobs",
+                    headers=headers,
+                    data={"config": json.dumps(config)},
+                    files={"data_file": f},
+                    timeout=120,
+                )
+            if sub.status_code == 429:
+                return "RATE_LIMIT"
+            if sub.status_code not in (200, 201):
+                return None
+            job_id = sub.json().get("id")
+            if not job_id:
+                return None
+
+            # Paso 2: poll del estado del job
+            status_url = f"https://asr.api.speechmatics.com/v2/jobs/{job_id}"
+            done = False
+            for _ in range(180):
+                jr = requests.get(status_url, headers=headers, timeout=30).json()
+                st = jr.get("job", {}).get("status")
+                if st == "done":
+                    done = True
+                    break
+                if st in ("rejected", "expired", "deleted"):
+                    return None
+                time.sleep(2)
+            if not done:
+                return None
+
+            # Paso 3: bajar la transcripción
+            if not diarize:
+                tr = requests.get(
+                    f"{status_url}/transcript",
+                    headers=headers, params={"format": "txt"}, timeout=60,
+                )
+                return tr.text if tr.status_code == 200 else None
+
+            tr = requests.get(
+                f"{status_url}/transcript",
+                headers=headers, params={"format": "json-v2"}, timeout=60,
+            )
+            if tr.status_code != 200:
+                return None
+            results = tr.json().get("results", [])
+
+            # json-v2 da items por palabra/puntuación con speaker "S1","S2";
+            # los agrupamos en utterances por hablante.
+            utterances = []
+            cur = None
+            for item in results:
+                alt = (item.get("alternatives") or [{}])[0]
+                spk = alt.get("speaker", "UU")
+                content = alt.get("content", "")
+                is_punct = item.get("type") == "punctuation"
+                start = item.get("start_time", 0.0)
+                end = item.get("end_time", start)
+                if cur is None or (spk != cur["speaker"] and not is_punct):
+                    if cur and cur["text"].strip():
+                        utterances.append(cur)
+                    cur = {"speaker": spk, "start": start, "end": end, "text": content}
+                else:
+                    cur["text"] += ("" if is_punct else " ") + content
+                    cur["end"] = end
+            if cur and cur["text"].strip():
+                utterances.append(cur)
+            if not utterances:
+                return None
+            return [
+                {
+                    "speaker": str(u["speaker"]).replace("S", ""),
+                    "start": round(u["start"] + offset_sec, 3),
+                    "end": round(u["end"] + offset_sec, 3),
+                    "text": u["text"].strip(),
+                }
+                for u in utterances
+                if u["text"].strip()
+            ]
 
     except Exception:
         return None
@@ -634,6 +732,7 @@ def process_file(file_path):
         ("deepgram", DEEPGRAM_API_KEY),
         ("assemblyai", ASSEMBLYAI_API_KEY),
         ("elevenlabs", ELEVENLABS_API_KEY),
+        ("speechmatics", SPEECHMATICS_API_KEY),
     ]
 
     if HAS_TQDM:
@@ -651,6 +750,8 @@ def process_file(file_path):
         diarization_providers.append("assemblyai")
     if ELEVENLABS_API_KEY:
         diarization_providers.append("elevenlabs")
+    if SPEECHMATICS_API_KEY:
+        diarization_providers.append("speechmatics")
 
     all_utterances = []
     diarization_ok = bool(diarization_providers)
