@@ -46,6 +46,7 @@ GROQ_API_KEY = load_key("groq")
 GLADIA_API_KEY = load_key("gladia")
 DEEPGRAM_API_KEY = load_key("deepgram")
 ASSEMBLYAI_API_KEY = load_key("assemblyai")
+ELEVENLABS_API_KEY = load_key("elevenlabs")
 
 # Asegurar que existan las carpetas
 for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR]:
@@ -264,6 +265,65 @@ def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
                     return None
                 time.sleep(2)
             return None
+
+        elif provider == "elevenlabs":
+            # Scribe es síncrono (sin polling) y devuelve resultados a nivel de
+            # palabra con speaker_id; agrupamos palabras en utterances.
+            headers = {"xi-api-key": ELEVENLABS_API_KEY}
+            data = {"model_id": "scribe_v1"}
+            if diarize:
+                data["diarize"] = "true"
+            with open(file_path, "rb") as f:
+                res = requests.post(
+                    "https://api.elevenlabs.io/v1/speech-to-text",
+                    headers=headers,
+                    data=data,
+                    files={"file": f},
+                    timeout=300,
+                )
+            if res.status_code == 429:
+                return "RATE_LIMIT"
+            if res.status_code != 200:
+                return None
+            payload = res.json()
+
+            if diarize:
+                words = payload.get("words") or []
+                utterances = []
+                cur = None
+                for w in words:
+                    if w.get("type") == "audio_event":
+                        continue
+                    # "speaker_0" -> "0" para que quede "Speaker 0" como Deepgram
+                    spk = str(w.get("speaker_id", "speaker_0")).replace("speaker_", "")
+                    if cur is None or spk != cur["speaker"]:
+                        if cur and cur["text"].strip():
+                            utterances.append(cur)
+                        cur = {
+                            "speaker": spk,
+                            "start": w.get("start", 0.0),
+                            "end": w.get("end", 0.0),
+                            "text": w.get("text", ""),
+                        }
+                    else:
+                        cur["text"] += w.get("text", "")
+                        cur["end"] = w.get("end", cur["end"])
+                if cur and cur["text"].strip():
+                    utterances.append(cur)
+                if not utterances:
+                    return None
+                # start/end ya vienen en segundos
+                return [
+                    {
+                        "speaker": u["speaker"],
+                        "start": round(u["start"] + offset_sec, 3),
+                        "end": round(u["end"] + offset_sec, 3),
+                        "text": u["text"].strip(),
+                    }
+                    for u in utterances
+                    if u["text"].strip()
+                ]
+            return payload.get("text")
 
     except Exception:
         return None
@@ -573,6 +633,7 @@ def process_file(file_path):
         ("gladia", GLADIA_API_KEY),
         ("deepgram", DEEPGRAM_API_KEY),
         ("assemblyai", ASSEMBLYAI_API_KEY),
+        ("elevenlabs", ELEVENLABS_API_KEY),
     ]
 
     if HAS_TQDM:
@@ -588,6 +649,8 @@ def process_file(file_path):
         diarization_providers.append("gladia")
     if ASSEMBLYAI_API_KEY:
         diarization_providers.append("assemblyai")
+    if ELEVENLABS_API_KEY:
+        diarization_providers.append("elevenlabs")
 
     all_utterances = []
     diarization_ok = bool(diarization_providers)
