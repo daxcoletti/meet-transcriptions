@@ -5,6 +5,7 @@ import subprocess
 import time
 import fcntl
 import hashlib
+import traceback
 from pathlib import Path
 import requests
 
@@ -57,6 +58,88 @@ SPEECHMATICS_LANG = "en"
 # Asegurar que existan las carpetas
 for d in [TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+
+# --- Progreso por instancia ---------------------------------------------------
+PROGRESS_DIR = AUDIOS_DIR / "progress"
+
+
+class Progress:
+    """Registra el avance de esta instancia en un JSON dentro de progress/.
+
+    El archivo se crea recién cuando la instancia toma un audio (las corridas
+    de cron que no encuentran nada no dejan rastro), se actualiza en cada
+    etapa, y se borra al terminar sin errores. Si algo falla, queda en disco
+    con el detalle del error para diagnóstico.
+    """
+
+    def __init__(self):
+        self.path = None
+        self.data = {}
+
+    def start(self, file_name):
+        PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
+        self.path = PROGRESS_DIR / f"instancia_{os.getpid()}.json"
+        self.data = {
+            "pid": os.getpid(),
+            "archivo": file_name,
+            "inicio": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "actualizado": None,
+            "etapa": "inicio",
+            "segmento": None,
+            "segmentos_total": None,
+            "avisos": [],
+            "error": None,
+        }
+        self._write()
+
+    def update(self, etapa=None, segmento=None, segmentos_total=None):
+        if self.path is None:
+            return
+        if etapa is not None:
+            self.data["etapa"] = etapa
+        if segmento is not None:
+            self.data["segmento"] = segmento
+        if segmentos_total is not None:
+            self.data["segmentos_total"] = segmentos_total
+        self._write()
+
+    def warn(self, msg):
+        """Anota un problema no fatal (p.ej. un proveedor que falló)."""
+        if self.path is None:
+            return
+        self.data["avisos"].append(f"{time.strftime('%H:%M:%S')} {msg}")
+        self._write()
+
+    def fail(self, msg):
+        """Registra el error y DEJA el archivo en disco para diagnóstico."""
+        if self.path is None:
+            return
+        self.data["etapa"] = "error"
+        self.data["error"] = msg
+        self._write()
+        self.path = None
+
+    def finish(self):
+        """Terminó sin errores: borrar el archivo de progreso."""
+        if self.path is None:
+            return
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+        self.path = None
+
+    def _write(self):
+        self.data["actualizado"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(
+            json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        os.replace(tmp, self.path)
+
+
+PROGRESS = Progress()
 
 
 def split_audio(file_path):
@@ -781,7 +864,9 @@ def generate_minuta(transcript_text, filename):
 
 
 def process_file(file_path):
+    """Procesa un audio. Devuelve True si terminó bien, False si falló."""
     print(f"\n{YELLOW}📂 Procesando:{RESET} {file_path.name}")
+    PROGRESS.update(etapa="segmentando audio")
 
     segments, temp_dir = split_audio(file_path)
     if not segments:
@@ -789,11 +874,12 @@ def process_file(file_path):
             f"{RED}🚫 No se generaron segmentos. Abortando este archivo "
             f"(NO se mueve a procesados).{RESET}"
         )
+        PROGRESS.fail("ffmpeg no generó segmentos (¿archivo corrupto?)")
         try:
             temp_dir.rmdir()
         except OSError:
             pass
-        return
+        return False
 
     providers = [
         ("groq", GROQ_API_KEY),
@@ -826,8 +912,10 @@ def process_file(file_path):
     diarization_ok = bool(diarization_providers)
 
     if diarization_ok:
+        PROGRESS.update(etapa="diarizando", segmentos_total=len(segments))
         for idx, seg in enumerate(segments):
             offset = idx * 600
+            PROGRESS.update(segmento=idx + 1)
             segment_utterances = None
             for p_name in diarization_providers:
                 result = transcribe_with_provider(seg, p_name, diarize=True, offset_sec=offset)
@@ -837,6 +925,9 @@ def process_file(file_path):
                 print(
                     f"\n{YELLOW}⚠️ Diarización con {p_name.upper()} falló en "
                     f"segmento {idx + 1}/{len(segments)}.{RESET}"
+                )
+                PROGRESS.warn(
+                    f"diarización con {p_name} falló en segmento {idx + 1}/{len(segments)}"
                 )
 
             if segment_utterances is not None:
@@ -853,11 +944,17 @@ def process_file(file_path):
     # 2) Si la diarización falló en algún segmento, caemos a texto plano
     # ------------------------------------------------------------------
     if not diarization_ok:
+        PROGRESS.update(
+            etapa="transcribiendo sin diarización",
+            segmento=0,
+            segmentos_total=len(segments),
+        )
         all_utterances = []
         full_transcript = []
         overall_success = True
 
-        for seg in segments:
+        for idx, seg in enumerate(segments):
+            PROGRESS.update(segmento=idx + 1)
             segment_text = None
             for p_name, p_key in providers:
                 if not p_key:
@@ -870,12 +967,14 @@ def process_file(file_path):
                         f"\n{RED}⚠️ {p_name.upper()} alcanzó el límite.{RESET} "
                         f"Probando siguiente..."
                     )
+                    PROGRESS.warn(f"{p_name} con rate limit en segmento {idx + 1}")
                     continue
                 elif result:
                     segment_text = result
                     break
                 else:
                     print(f"\n{RED}❌ {p_name.upper()} falló.{RESET}")
+                    PROGRESS.warn(f"{p_name} falló en segmento {idx + 1}")
 
             if segment_text:
                 full_transcript.append(segment_text)
@@ -889,6 +988,7 @@ def process_file(file_path):
             pbar.close()
 
         if overall_success:
+            PROGRESS.update(etapa="guardando transcripción")
             vtt_content, txt_content, json_content = build_fallback_outputs(full_transcript)
             out_vtt = TRANSCRIPTIONS_DIR / f"{file_path.stem}.vtt"
             out_txt = TRANSCRIPTIONS_DIR / f"{file_path.stem}.txt"
@@ -897,12 +997,14 @@ def process_file(file_path):
             out_txt.write_text(txt_content, encoding="utf-8")
             out_json.write_text(json_content, encoding="utf-8")
             os.rename(file_path, PROCESSED_DIR / file_path.name)
+            PROGRESS.update(etapa="generando minuta")
             minuta = generate_minuta(txt_content, file_path.name)
             out_md = MINUTAS_DIR / f"{file_path.stem}.md"
             if minuta:
                 out_md.write_text(minuta, encoding="utf-8")
             else:
                 out_md.touch()
+                PROGRESS.warn("no se pudo generar la minuta (md vacío)")
             with open(LOG_FILE, "a") as log:
                 ts = time.strftime("%Y-%m-%d %H:%M:%S")
                 log.write(f"{file_path.name} | {ts}\n")
@@ -917,12 +1019,13 @@ def process_file(file_path):
             print(
                 f"{RED}🚫 No se pudo procesar el archivo con ninguna IA disponible.{RESET}"
             )
+            PROGRESS.fail("ningún proveedor pudo transcribir el archivo")
 
         # Limpieza
         for f in segments:
             f.unlink()
         temp_dir.rmdir()
-        return
+        return overall_success
 
     # ------------------------------------------------------------------
     # 3) Diarización exitosa: generar VTT + TXT
@@ -930,6 +1033,7 @@ def process_file(file_path):
     if HAS_TQDM:
         pbar.close()
 
+    PROGRESS.update(etapa="guardando transcripción")
     vtt_content, txt_content, json_content = build_diarization_outputs(all_utterances)
 
     out_vtt = TRANSCRIPTIONS_DIR / f"{file_path.stem}.vtt"
@@ -940,12 +1044,14 @@ def process_file(file_path):
     out_json.write_text(json_content, encoding="utf-8")
 
     os.rename(file_path, PROCESSED_DIR / file_path.name)
+    PROGRESS.update(etapa="generando minuta")
     minuta = generate_minuta(txt_content, file_path.name)
     out_md = MINUTAS_DIR / f"{file_path.stem}.md"
     if minuta:
         out_md.write_text(minuta, encoding="utf-8")
     else:
         out_md.touch()
+        PROGRESS.warn("no se pudo generar la minuta (md vacío)")
     with open(LOG_FILE, "a") as log:
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         log.write(f"{file_path.name} | {ts}\n")
@@ -962,6 +1068,7 @@ def process_file(file_path):
     for f in segments:
         f.unlink()
     temp_dir.rmdir()
+    return True
 
 
 LOCK_DIR = Path("/tmp/transcripcion_locks")
@@ -1030,7 +1137,14 @@ if __name__ == "__main__":
                 continue
             try:
                 worked = True
-                process_file(f)
+                PROGRESS.start(f.name)
+                if process_file(f):
+                    PROGRESS.finish()
+                # Si process_file devolvió False, ya registró el error y el
+                # archivo de progreso queda en disco para diagnóstico.
+            except Exception:
+                PROGRESS.fail(traceback.format_exc())
+                raise
             finally:
                 release_lock(lock_fd)
             # Solo procesamos UN archivo por instancia: si esta instancia tomó f,

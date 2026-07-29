@@ -115,6 +115,10 @@ Para `Reunion 2026-04-28.mkv` se genera:
 - el archivo original se mueve a `procesados/`
 - el nombre queda registrado en `done_transcriptions.txt`
 
+### Progreso por instancia
+
+Mientras una instancia procesa un audio va actualizando `progress/instancia_<pid>.json` (etapa, segmento actual, avisos). Al terminar sin errores lo borra; si falla, el JSON queda en disco con el detalle del error (incluido el traceback si fue una excepción inesperada). Un `progress/` vacío significa que no hay nada corriendo ni fallado.
+
 ## Errores comunes
 
 - **`ffmpeg: not found`** → instalar con `apt install ffmpeg`.
