@@ -81,6 +81,11 @@ STRINGS = {
         "es": "{name}: no se pudo procesar (ver actividad).",
         "en": "{name}: could not be processed (see activity).",
     },
+    "notify.noaudio.title": {"es": "Sin pista de audio", "en": "No audio track"},
+    "notify.noaudio.body": {
+        "es": "{name}: no tiene audio, no hay nada para transcribir. Se archivó en procesados/.",
+        "en": "{name}: has no audio, nothing to transcribe. Archived in procesados/.",
+    },
     "notify.nominuta.title": {
         "es": "Transcripción lista (SIN minuta)",
         "en": "Transcript ready (NO minutes)",

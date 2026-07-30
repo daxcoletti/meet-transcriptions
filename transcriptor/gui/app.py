@@ -358,7 +358,10 @@ class TrayApp:
         if engine.FFMPEG is None:
             engine.log(tr("log.no_ffmpeg"))
         # Rescatar grabaciones interrumpidas ANTES de arrancar el watcher,
-        # así los archivos recuperados entran por el barrido inicial.
+        # así los archivos recuperados entran por el barrido inicial. Primero
+        # matar ffmpeg huérfanos: si siguen grabando, tienen los archivos
+        # agarrados y la recuperación falla con "en uso por otro proceso".
+        recorder_mod.kill_orphan_ffmpeg(self.cfg, log=engine.log)
         recorder_mod.recover_orphans(self.cfg, log=engine.log)
         self.watcher = AudioWatcher(self.cfg, on_file_done=self.bridge.file_done.emit)
         self.watcher.start()
@@ -523,6 +526,13 @@ class TrayApp:
                 tr("notify.done.body", name=name),
                 QSystemTrayIcon.Information,
                 8000,
+            )
+        elif status == "no_audio":
+            self.tray.showMessage(
+                tr("notify.noaudio.title"),
+                tr("notify.noaudio.body", name=name),
+                QSystemTrayIcon.Warning,
+                10000,
             )
         elif status == "ok_no_minuta":
             self.tray.showMessage(

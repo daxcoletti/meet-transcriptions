@@ -112,6 +112,50 @@ class _StreamWriter(threading.Thread):
             self.error = f"{self.kind}: {e}"
 
 
+def kill_orphan_ffmpeg(cfg, log=None):
+    """Mata ffmpeg huérfanos de sesiones anteriores que siguen grabando.
+
+    Si la app crashea sin detener ffmpeg, ese proceso sigue grabando la
+    pantalla indefinidamente y mantiene agarrados los archivos de staging
+    (impide recuperarlos). Se identifican porque su línea de comandos apunta
+    a nuestro directorio .grabando/.
+    """
+    log = log or (lambda m: None)
+    marker = str(cfg.audios_dir / STAGING_DIRNAME)
+    pids = []
+    try:
+        if os.name == "nt":
+            quoted = marker.replace("'", "''")
+            script = (
+                "Get-CimInstance Win32_Process -Filter \"Name='ffmpeg.exe'\" | "
+                f"Where-Object {{ $_.CommandLine -like '*{quoted}*' }} | "
+                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force; $_.ProcessId }"
+            )
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True, text=True, timeout=30,
+                **ffmpeg_utils.SUBPROCESS_FLAGS,
+            )
+            pids = [l.strip() for l in (proc.stdout or "").splitlines() if l.strip()]
+        else:
+            proc = subprocess.run(
+                ["pgrep", "-f", f"ffmpeg.*{marker}"],
+                capture_output=True, text=True, timeout=10,
+                env=ffmpeg_utils.subprocess_env(),
+            )
+            pids = [p for p in proc.stdout.split() if p]
+            for pid in pids:
+                subprocess.run(["kill", pid], capture_output=True, timeout=10)
+        if pids:
+            log(
+                f"🧹 Cerré {len(pids)} grabación(es) huérfana(s) de una sesión "
+                f"anterior (PID {', '.join(pids)})."
+            )
+            time.sleep(1.5)  # que el SO libere los archivos antes de recuperar
+    except Exception as e:
+        log(f"⚠️  no pude buscar ffmpeg huérfanos: {e}")
+
+
 def recover_orphans(cfg, log=None):
     """Rescata grabaciones que quedaron en .grabando/ por un crash o cierre.
 

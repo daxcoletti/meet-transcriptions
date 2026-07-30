@@ -252,8 +252,13 @@ class Progress:
 PROGRESS = Progress()
 
 
+_LAST_SPLIT_STDERR = ""
+
+
 def split_audio(file_path):
     """Divide el audio en segmentos de 10 min para evitar límites de tamaño de las APIs."""
+    global _LAST_SPLIT_STDERR
+    _LAST_SPLIT_STDERR = ""
     temp_dir = Path(tempfile.mkdtemp(prefix=f"seg_{os.getpid()}_"))
     if not FFMPEG:
         log(f"{RED}❌ ffmpeg no está disponible. Instalalo o descargalo desde la configuración.{RESET}")
@@ -271,8 +276,20 @@ def split_audio(file_path):
     segments = sorted(list(temp_dir.glob("*.mp3")))
     if proc.returncode != 0 or not segments:
         err = proc.stderr.decode("utf-8", errors="replace")[-500:] if proc.stderr else ""
+        _LAST_SPLIT_STDERR = err
+        if _is_no_audio_error(err):
+            # Video sin pista de audio: no es un fallo de ffmpeg, lo maneja
+            # process_file. No ensuciar el log con el stderr completo.
+            return segments, temp_dir
         log(f"{RED}❌ ffmpeg falló (rc={proc.returncode}). stderr:{RESET}\n{err}")
     return segments, temp_dir
+
+
+def _is_no_audio_error(stderr_text):
+    """El archivo no tiene NINGUNA pista de audio (p.ej. video de pantalla
+    grabado sin micrófono ni loopback): ffmpeg falla con este mensaje al
+    intentar extraer audio."""
+    return "does not contain any stream" in (stderr_text or "")
 
 
 def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
@@ -993,6 +1010,7 @@ def process_file(file_path):
     Devuelve (todos truthy salvo el fallo):
       "ok"           → transcripción y minuta generadas
       "ok_no_minuta" → transcripción lista pero la minuta no se pudo generar
+      "no_audio"     → el archivo no tiene pista de audio (se archiva sin más)
       False          → falló (el archivo NO se mueve a procesados)
     """
     log(f"\n{YELLOW}📂 Procesando:{RESET} {file_path.name}")
@@ -1000,15 +1018,27 @@ def process_file(file_path):
 
     segments, temp_dir = split_audio(file_path)
     if not segments:
+        try:
+            temp_dir.rmdir()
+        except OSError:
+            pass
+        if _is_no_audio_error(_LAST_SPLIT_STDERR):
+            # Sin pista de audio no hay nada que transcribir. Archivar y
+            # registrar para no reintentarlo en cada barrido.
+            log(
+                f"{YELLOW}⚠️  {file_path.name}: no tiene pista de audio; "
+                f"nada para transcribir. Lo muevo a procesados.{RESET}"
+            )
+            os.rename(file_path, PROCESSED_DIR / file_path.name)
+            with open(LOG_FILE, "a") as log_f:
+                ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                log_f.write(f"{file_path.name} | {ts} | SIN AUDIO\n")
+            return "no_audio"
         log(
             f"{RED}🚫 No se generaron segmentos. Abortando este archivo "
             f"(NO se mueve a procesados).{RESET}"
         )
         PROGRESS.fail("ffmpeg no generó segmentos (¿archivo corrupto o ffmpeg ausente?)")
-        try:
-            temp_dir.rmdir()
-        except OSError:
-            pass
         return False
 
     providers = [
