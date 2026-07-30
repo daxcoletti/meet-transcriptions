@@ -66,3 +66,48 @@ jobs:
         with:
           name: MeetTranscriptions-deb
           path: dist/*.deb
+
+  # Al taggear vX.Y.Z, el release se publica SOLO con los 4 archivos:
+  # exe y deb, cada uno versionado + con nombre fijo (para los links
+  # permanentes releases/latest/download/...). Garantiza que el paquete
+  # de Debian/Ubuntu salga SIEMPRE junto con el de Windows.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, build-deb]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Descargar artefactos
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Preparar assets (copias con nombre fijo)
+        run: |
+          mkdir out
+          cp artifacts/MeetTranscriptions-Setup/*.exe out/
+          cp artifacts/MeetTranscriptions-deb/*.deb out/
+          cp out/MeetTranscriptions-Setup-*.exe out/MeetTranscriptions-Setup.exe
+          cp out/meet-transcriptions_*_amd64.deb out/meet-transcriptions_amd64.deb
+          ls -la out/
+
+      - name: Publicar release (o completar assets si ya existe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" out/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            printf '%s\n' \
+              "**Descarga directa (siempre la última versión):**" \
+              "- Windows: https://github.com/$GITHUB_REPOSITORY/releases/latest/download/MeetTranscriptions-Setup.exe" \
+              "- Debian/Ubuntu: https://github.com/$GITHUB_REPOSITORY/releases/latest/download/meet-transcriptions_amd64.deb" \
+              "" > notes.md
+            gh release create "$TAG" out/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Meet Transcriptions ${TAG#v}" \
+              --notes-file notes.md \
+              --generate-notes
+          fi
