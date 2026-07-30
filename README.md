@@ -1,6 +1,36 @@
-# meet-transcriptions
+# Meet Transcriptions
+
+> 🇦🇷 **[Documentación completa en español más abajo.](#meet-transcriptions-español)**
+
+Automatic transcription of meeting recordings (Google Meet, Zoom, phone calls…). It watches a folder and, for every new audio/video file, generates a **speaker-diarized transcript** (VTT, TXT, JSON) and **AI-written meeting minutes** in Markdown — rotating across the **free tiers** of several transcription APIs (Deepgram, Gladia, AssemblyAI, ElevenLabs, Speechmatics, Groq) to dodge individual quota limits. Minutes are generated with Google Gemini (1M-token context) or Groq as fallback.
+
+**Features**
+
+- Desktop app for **Windows and Linux**: lives in the system tray, first-run wizard (checks/downloads ffmpeg, validates API keys, pins the recordings folder to the file explorer and Desktop), bilingual UI (English/Spanish, auto-detected).
+- Detects new recordings via **native filesystem events** (inotify / ReadDirectoryChangesW — no polling) and waits until the file finishes copying.
+- Tray icon shows configuration status at a glance (green/yellow/red badge) and notifies when each transcript + minutes are ready.
+- **Automatic updates** with explicit user confirmation (checks GitHub Releases).
+- Headless **CLI/cron mode** for servers.
+
+| First-run wizard (API keys step) | Tray icon states |
+|---|---|
+| ![Wizard — API keys](docs/img/wizard-keys.png) | ![Tray badges](docs/img/tray-badges.png) |
+
+**Download (Windows):** get the latest `MeetTranscriptions-Setup-*.exe` from the [Releases page](https://github.com/daxcoletti/meet-transcriptions/releases).
+
+> ⚠️ The installer is not code-signed yet, so Windows SmartScreen will warn you: click **"More info" → "Run anyway"**. On Windows 11 with *Smart App Control* enabled there is no bypass — Smart App Control must be turned off to install unsigned apps.
+
+**License:** [GNU GPL v3](LICENSE) (or, at your option, any later version).
+
+---
+
+# Meet Transcriptions (español)
 
 Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) que rota entre varias APIs gratuitas para esquivar los límites de cuota individuales, genera transcripción con diarización (identificación de hablantes) y una **minuta** en Markdown.
+
+**Descarga (Windows):** el instalador `MeetTranscriptions-Setup-*.exe` está en la [página de Releases](https://github.com/daxcoletti/meet-transcriptions/releases).
+
+> ⚠️ El instalador todavía no está firmado digitalmente, así que SmartScreen va a avisar: clic en **"Más información" → "Ejecutar de todas formas"**. En Windows 11 con el *Control inteligente de aplicaciones* activado no hay bypass: hay que desactivarlo para instalar apps sin firma.
 
 Funciona en **dos modos**:
 

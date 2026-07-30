@@ -24,6 +24,9 @@ jobs:
       - name: Generar icono
         run: python packaging/make_icon.py
 
+      - name: Generar metadata de versión del exe
+        run: python packaging/make_version_info.py
+
       - name: Build PyInstaller (onedir)
         run: pyinstaller packaging/transcriptor.spec
 

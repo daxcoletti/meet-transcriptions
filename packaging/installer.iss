@@ -11,7 +11,7 @@
 ; muestra antes de instalar).
 
 #define MyAppName "Meet Transcriptions"
-#define MyAppVersion "2.3.1"
+#define MyAppVersion "2.3.2"
 #define MyAppPublisher "TRANS-IT Foundation"
 #define MyAppExeName "MeetTranscriptions.exe"
 
@@ -59,8 +59,16 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Sin skipifsilent: tras una actualización silenciosa la app se reabre sola.
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall
+; Relanzar la app tras instalar, salvo en /VERYSILENT (winget, despliegues
+; masivos): ahí un GUI abriéndose solo es comportamiento indeseado. El
+; updater de la app usa /SILENT, así que la reapertura automática se mantiene.
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall; Check: NotVerySilent
+
+[Code]
+function NotVerySilent(): Boolean;
+begin
+  Result := Pos('/VERYSILENT', UpperCase(GetCmdTail)) = 0;
+end;
 
 [UninstallRun]
 ; Quitar el autostart que la app registra en HKCU\...\Run al configurarse.

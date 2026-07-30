@@ -16,6 +16,10 @@ datas = collect_data_files("langdetect")
 icon_path = os.path.join(SPECPATH, "windows", "icon.ico")
 icon = icon_path if os.path.exists(icon_path) else None
 
+# Recurso de versión de Windows (generado por packaging/make_version_info.py)
+version_path = os.path.join(SPECPATH, "windows", "version_info.txt")
+version_file = version_path if os.path.exists(version_path) else None
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[ROOT],
@@ -40,6 +44,7 @@ exe = EXE(
     upx=False,
     console=False,
     icon=icon,
+    version=version_file,
 )
 
 coll = COLLECT(
