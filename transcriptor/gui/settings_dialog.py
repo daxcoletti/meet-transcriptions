@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QKeySequenceEdit,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -119,6 +121,17 @@ class SettingsDialog(QDialog):
         self.rec_system = QCheckBox(tr("set.rec_system"))
         self.rec_system.setChecked(bool(cfg.data.get("record_system", True)))
         rec_form.addRow("", self.rec_system)
+
+        self.hotkey_edit = QKeySequenceEdit(
+            QKeySequence(cfg.data.get("record_hotkey", ""))
+        )
+        self.hotkey_edit.setToolTip(tr("set.hotkey_tip"))
+        hotkey_clear = QPushButton(tr("set.hotkey_clear"))
+        hotkey_clear.clicked.connect(self.hotkey_edit.clear)
+        hk_row = QHBoxLayout()
+        hk_row.addWidget(self.hotkey_edit, 1)
+        hk_row.addWidget(hotkey_clear)
+        rec_form.addRow(tr("set.hotkey"), hk_row)
         layout.addWidget(rec_box)
 
         # --- ffmpeg ---
@@ -161,6 +174,10 @@ class SettingsDialog(QDialog):
         data["record_mic"] = self.rec_mic.isChecked()
         data["record_system"] = self.rec_system.isChecked()
         data["debug_log"] = self.debug_check.isChecked()
+        # QKeySequenceEdit puede capturar varias combinaciones: usar la primera.
+        data["record_hotkey"] = (
+            self.hotkey_edit.keySequence().toString().split(",")[0].strip()
+        )
         cfg = Config(data)
         cfg.save()
         cfg.ensure_dirs()

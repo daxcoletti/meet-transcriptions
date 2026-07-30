@@ -54,6 +54,7 @@ _DEFAULTS = {
     "record_quality": "low",  # "low" (480p/2fps) | "medium" (720p/5fps)
     "record_mic": True,       # grabar micrófono
     "record_system": True,    # grabar audio del sistema (lo que se escucha)
+    "record_hotkey": "Ctrl+Alt+R",  # atajo global grabar/detener ("" = desactivado)
     # Registro de diagnóstico en archivo (app.log). Costo imperceptible:
     # unas líneas de texto por archivo procesado. El crash.log (faulthandler)
     # va siempre porque no cuesta nada hasta que hay un crash.

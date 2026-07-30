@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, config, engine, ffmpeg_utils, i18n, updater
+from .. import hotkey as hotkey_mod
 from .. import recorder as recorder_mod
 from ..i18n import tr
 from ..recorder import RecordingError, ScreenRecorder
@@ -126,6 +127,7 @@ class _Bridge(QObject):
     file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
     progress = Signal(object)     # dict de progreso del engine (archivo, etapa, ...)
     record_done = Signal(object)  # {"path": str|None, "error": str|None}
+    hotkey_pressed = Signal()     # atajo global grabar/detener (desde el hilo de pynput)
     update_checked = Signal(object)  # {"info": dict|None, "manual": bool, "error": str|None}
     update_ready = Signal(object)    # {"path": str|None, "error": str|None}
 
@@ -160,6 +162,7 @@ class TrayApp:
         self.bridge.file_done.connect(self._notify_done)
         self.bridge.progress.connect(self._on_progress)
         self.bridge.record_done.connect(self._on_record_done)
+        self.bridge.hotkey_pressed.connect(self._on_hotkey)
         self.bridge.update_checked.connect(self._on_update_checked)
         self.bridge.update_ready.connect(self._on_update_ready)
         engine.set_log_callback(self.bridge.log_line.emit)
@@ -177,6 +180,7 @@ class TrayApp:
 
         # Grabación de pantalla
         self.recorder = None
+        self.hotkey = None
         self._rec_timer = QTimer()
         self._rec_timer.setInterval(1000)
         self._rec_timer.timeout.connect(self._rec_tick)
@@ -186,6 +190,32 @@ class TrayApp:
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    # --- Atajo global ---
+    def _setup_hotkey(self):
+        if self.hotkey:
+            self.hotkey.stop()
+            self.hotkey = None
+        seq = self.cfg.data.get("record_hotkey", "")
+        if not seq:
+            return
+        if not hotkey_mod.available():
+            engine.log(tr("hotkey.unavailable"))
+            return
+        try:
+            self.hotkey = hotkey_mod.HotkeyListener(
+                seq, self.bridge.hotkey_pressed.emit
+            )
+            self.hotkey.start()
+            engine.log(tr("hotkey.active", combo=seq))
+        except Exception as e:
+            self.hotkey = None
+            engine.log(tr("hotkey.failed", combo=seq, err=e))
+
+    def _on_hotkey(self):
+        # Ignorar mientras se está guardando una grabación (acción deshabilitada).
+        if self.record_action.isEnabled():
+            self._toggle_recording()
 
     # --- Grabación de pantalla ---
     def _toggle_recording(self):
@@ -228,6 +258,13 @@ class TrayApp:
             return
         self._rec_timer.start()
         self._rec_tick()
+        seq = self.cfg.data.get("record_hotkey", "")
+        self.tray.showMessage(
+            tr("rec.started.title"),
+            tr("rec.started.body_hotkey", hotkey=seq) if seq else tr("rec.started.body"),
+            QSystemTrayIcon.Information,
+            5000,
+        )
 
     def _rec_tick(self):
         if not (self.recorder and self.recorder.recording):
@@ -310,7 +347,9 @@ class TrayApp:
     def _build_menu(self):
         """(Re)arma el menú de la bandeja — se rehace si cambia el idioma."""
         menu = QMenu()
-        self.record_action = QAction(tr("rec.start"))
+        seq = self.cfg.data.get("record_hotkey", "")
+        label = tr("rec.start") + (f"  ({seq})" if seq else "")
+        self.record_action = QAction(label)
         if self.recorder and self.recorder.recording:
             self.record_action.setText(
                 tr("rec.stop", time=_fmt_elapsed(self.recorder.elapsed()))
@@ -367,6 +406,8 @@ class TrayApp:
         self.watcher.start()
         engine.log(tr("log.watching", dir=self.cfg.audios_dir))
 
+        self._setup_hotkey()
+
         # Buscar actualizaciones: a los 15 s del arranque y luego cada 24 h.
         QTimer.singleShot(15_000, lambda: self._check_updates(manual=False))
         self._update_timer = QTimer()
@@ -380,6 +421,8 @@ class TrayApp:
         self.start()
 
     def _quit(self):
+        if self.hotkey:
+            self.hotkey.stop()
         if self._recording_active():
             # Cerrar con gracia: finalizar el MKV y moverlo a la carpeta
             # vigilada; se transcribe en el próximo arranque (barrido inicial).
@@ -425,6 +468,7 @@ class TrayApp:
             self.log_window.setWindowTitle(tr("log.title"))
             self._update_tray_status()
             self._build_menu()
+            self._setup_hotkey()
             self._restart_watcher()
             engine.log(tr("log.settings_updated"))
 

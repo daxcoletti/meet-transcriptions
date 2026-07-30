@@ -20,12 +20,20 @@ icon = icon_path if os.path.exists(icon_path) else None
 version_path = os.path.join(SPECPATH, "windows", "version_info.txt")
 version_file = version_path if os.path.exists(version_path) else None
 
+# pynput elige su backend con imports dinámicos: hay que declararlos.
+import sys as _sys
+
+if _sys.platform == "win32":
+    _pynput_hidden = ["pynput.keyboard._win32", "pynput.mouse._win32"]
+else:
+    _pynput_hidden = ["pynput.keyboard._xorg", "pynput.mouse._xorg"]
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[ROOT],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=_pynput_hidden,
     hookspath=[],
     runtime_hooks=[],
     excludes=["tkinter"],

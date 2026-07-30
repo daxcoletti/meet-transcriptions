@@ -114,6 +114,33 @@ STRINGS = {
         "en": "Screen recording on Wayland sessions is coming in a future version. "
               "You can log in with an Xorg session to use it today.",
     },
+    "rec.started.title": {"es": "Grabando pantalla", "en": "Recording screen"},
+    "rec.started.body_hotkey": {
+        "es": "La grabación arrancó. Detenela con {hotkey} o desde el menú de la bandeja.",
+        "en": "Recording started. Stop it with {hotkey} or from the tray menu.",
+    },
+    "rec.started.body": {
+        "es": "La grabación arrancó. Detenela desde el menú de la bandeja.",
+        "en": "Recording started. Stop it from the tray menu.",
+    },
+    "hotkey.active": {
+        "es": "⌨ Atajo global de grabación activo: {combo}",
+        "en": "⌨ Global recording hotkey active: {combo}",
+    },
+    "hotkey.failed": {
+        "es": "⚠️  No pude registrar el atajo {combo}: {err}",
+        "en": "⚠️  Could not register hotkey {combo}: {err}",
+    },
+    "hotkey.unavailable": {
+        "es": "⚠️  Los atajos globales no están disponibles en esta sesión (Wayland).",
+        "en": "⚠️  Global hotkeys are not available in this session (Wayland).",
+    },
+    "set.hotkey": {"es": "Atajo grabar/detener:", "en": "Record/stop hotkey:"},
+    "set.hotkey_clear": {"es": "Quitar", "en": "Clear"},
+    "set.hotkey_tip": {
+        "es": "Hacé clic y presioná la combinación (p.ej. Ctrl+Alt+R). Vacío = sin atajo.",
+        "en": "Click and press the combination (e.g. Ctrl+Alt+R). Empty = no hotkey.",
+    },
     "set.rec_group": {"es": "Grabación de pantalla", "en": "Screen recording"},
     "set.rec_quality": {"es": "Calidad:", "en": "Quality:"},
     "set.rec_q_low": {"es": "Baja (480p, 2 fps) — recomendada", "en": "Low (480p, 2 fps) — recommended"},

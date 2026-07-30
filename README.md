@@ -8,7 +8,7 @@ Automatic transcription of meeting recordings (Google Meet, Zoom, phone calls…
 
 - Desktop app for **Windows and Linux**: lives in the system tray, first-run wizard (checks/downloads ffmpeg, validates API keys, pins the recordings folder to the file explorer and Desktop), bilingual UI (English/Spanish, auto-detected).
 - Detects new recordings via **native filesystem events** (inotify / ReadDirectoryChangesW — no polling) and waits until the file finishes copying.
-- **Built-in screen recorder** (no OBS needed): one click in the tray records the screen at deliberately low resolution/fps (ideal for capturing which slides/screens were shared, with tiny files) plus microphone and system audio; when stopped, the recording flows straight into the transcription pipeline. Windows and Linux/X11 today; Wayland support planned.
+- **Built-in screen recorder** (no OBS needed): one click in the tray — or a global hotkey (Ctrl+Alt+R by default, configurable) — records the screen at deliberately low resolution/fps (ideal for capturing which slides/screens were shared, with tiny files) plus microphone and system audio; when stopped, the recording flows straight into the transcription pipeline. Windows and Linux/X11 today; Wayland support planned.
 - Tray icon shows configuration status at a glance (green/yellow/red badge), live activity (processing spinner / recording dot) and notifies when each transcript + minutes are ready.
 - **Automatic updates** with explicit user confirmation (checks GitHub Releases).
 - Headless **CLI/cron mode** for servers.
