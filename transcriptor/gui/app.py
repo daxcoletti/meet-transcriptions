@@ -5,6 +5,7 @@ menú se abre el registro de actividad, la configuración y las carpetas de
 resultados.
 """
 
+import subprocess
 import sys
 import threading
 
@@ -19,11 +20,32 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from .. import __version__, config, engine, i18n, updater
+from .. import __version__, config, engine, ffmpeg_utils, i18n, updater
 from ..i18n import tr
 from ..watcher import AudioWatcher
 from .settings_dialog import SettingsDialog
 from .wizard import run_wizard
+
+
+def _open_external(target):
+    """Abre una carpeta o URL con la app del sistema.
+
+    En la app congelada de Linux no usamos QDesktopServices: lanzaría
+    xdg-open con el LD_LIBRARY_PATH del bundle y el navegador/gestor de
+    archivos puede morir con librerías incompatibles (mismo problema que
+    ffmpeg). Lo lanzamos nosotros con el entorno limpio.
+    """
+    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+        try:
+            subprocess.Popen(
+                ["xdg-open", str(target)], env=ffmpeg_utils.subprocess_env()
+            )
+            return
+        except OSError:
+            pass  # sin xdg-open: caer a Qt
+    s = str(target)
+    url = QUrl(s) if s.startswith(("http://", "https://")) else QUrl.fromLocalFile(s)
+    QDesktopServices.openUrl(url)
 
 
 _BADGE_COLORS = {"ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031"}
@@ -210,7 +232,7 @@ class TrayApp:
 
     def _open_dir(self, path):
         path.mkdir(parents=True, exist_ok=True)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        _open_external(path)
 
     def _toggle_pause(self, checked):
         if not self.watcher:
@@ -290,7 +312,7 @@ class TrayApp:
             return
         if not updater.can_self_update() or not info.get("installer_url"):
             # Desde código (Linux/dev) no hay auto-update: abrir el release.
-            QDesktopServices.openUrl(QUrl(info["page_url"]))
+            _open_external(info["page_url"])
             return
         if not self._confirm_update(info):
             return

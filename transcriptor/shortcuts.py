@@ -10,7 +10,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from .ffmpeg_utils import SUBPROCESS_FLAGS
+from .ffmpeg_utils import SUBPROCESS_FLAGS, subprocess_env
 
 
 def _powershell(script):
@@ -42,7 +42,8 @@ def desktop_dir():
 
     try:
         proc = subprocess.run(
-            ["xdg-user-dir", "DESKTOP"], capture_output=True, text=True, timeout=10
+            ["xdg-user-dir", "DESKTOP"],
+            capture_output=True, text=True, timeout=10, env=subprocess_env(),
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return Path(proc.stdout.strip())

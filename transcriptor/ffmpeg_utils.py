@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -33,6 +34,26 @@ SUBPROCESS_FLAGS = (
 _EXE = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
 
 
+def subprocess_env():
+    """Entorno limpio para lanzar binarios EXTERNOS desde la app congelada.
+
+    En Linux, el bootloader de PyInstaller exporta LD_LIBRARY_PATH apuntando
+    a las librerías del bundle (construidas en Ubuntu 22.04). Si un binario
+    del sistema (p.ej. /usr/bin/ffmpeg) hereda ese valor, carga un libstdc++
+    más viejo que el que necesita y muere con "GLIBCXX_x.y.z not found".
+    Restauramos el valor original que el bootloader guarda en
+    LD_LIBRARY_PATH_ORIG (o lo quitamos si no había).
+    """
+    env = dict(os.environ)
+    if getattr(sys, "frozen", False) and os.name != "nt":
+        orig = env.get("LD_LIBRARY_PATH_ORIG")
+        if orig is not None:
+            env["LD_LIBRARY_PATH"] = orig
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
 def _works(path):
     try:
         proc = subprocess.run(
@@ -40,6 +61,7 @@ def _works(path):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=15,
+            env=subprocess_env(),
             **SUBPROCESS_FLAGS,
         )
         return proc.returncode == 0

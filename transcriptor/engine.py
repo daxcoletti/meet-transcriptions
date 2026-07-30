@@ -212,6 +212,7 @@ def split_audio(file_path):
     ]
     proc = subprocess.run(
         cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        env=ffmpeg_utils.subprocess_env(),
         **ffmpeg_utils.SUBPROCESS_FLAGS,
     )
     segments = sorted(list(temp_dir.glob("*.mp3")))
