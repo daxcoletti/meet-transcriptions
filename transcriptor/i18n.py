@@ -25,6 +25,22 @@ STRINGS = {
     "tray.settings": {"es": "Configuración…", "en": "Settings…"},
     "tray.quit": {"es": "Salir", "en": "Quit"},
     "log.title": {"es": "Meet Transcriptions — Actividad", "en": "Meet Transcriptions — Activity"},
+    "tray.tip_ok": {
+        "es": "Meet Transcriptions — ✔ listo: transcripción y minuta configuradas",
+        "en": "Meet Transcriptions — ✔ ready: transcription and minutes configured",
+    },
+    "tray.tip_no_minuta": {
+        "es": "Meet Transcriptions — ⚠ transcribe, pero SIN minuta: falta key de Gemini o Groq (Configuración)",
+        "en": "Meet Transcriptions — ⚠ transcribes, but NO minutes: missing Gemini or Groq key (Settings)",
+    },
+    "tray.tip_no_trans": {
+        "es": "Meet Transcriptions — ⚠ falta una key de transcripción (Configuración)",
+        "en": "Meet Transcriptions — ⚠ missing a transcription key (Settings)",
+    },
+    "tray.tip_no_keys": {
+        "es": "Meet Transcriptions — ✘ sin API keys: no puede procesar nada (abrí Configuración)",
+        "en": "Meet Transcriptions — ✘ no API keys: nothing can be processed (open Settings)",
+    },
     "app.no_tray": {
         "es": "No hay bandeja del sistema disponible en este entorno.",
         "en": "No system tray is available in this environment.",

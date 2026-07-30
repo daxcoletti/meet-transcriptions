@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import validators
-from ..config import TRANSCRIPTION_PROVIDERS
+from ..config import MINUTA_PROVIDERS, TRANSCRIPTION_PROVIDERS
 from ..i18n import tr
 
 # (id, nombre, URL para conseguir la key)
@@ -31,7 +31,6 @@ TRANSCRIPTION_META = [
 MINUTA_META = [
     ("gemini", "Google Gemini", "https://aistudio.google.com/apikey"),
 ]
-MINUTA_PROVIDERS = ["gemini", "groq"]  # cualquiera de las dos habilita la minuta
 
 
 class _KeyChecker(QThread):

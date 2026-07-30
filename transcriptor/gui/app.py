@@ -25,8 +25,16 @@ from .settings_dialog import SettingsDialog
 from .wizard import run_wizard
 
 
-def _make_icon():
-    """Ícono de micrófono dibujado programáticamente (sin assets binarios)."""
+_BADGE_COLORS = {"ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031"}
+
+
+def _make_icon(badge=None):
+    """Ícono de micrófono dibujado programáticamente (sin assets binarios).
+
+    badge: None | "ok" | "warn" | "error" — agrega un distintivo de color en
+    la esquina con el estado de las API keys (verde = completo, amarillo =
+    falta transcripción o minuta, rojo = sin keys).
+    """
     pm = QPixmap(64, 64)
     pm.fill(Qt.transparent)
     p = QPainter(pm)
@@ -41,6 +49,23 @@ def _make_icon():
     p.setBrush(Qt.NoBrush)
     p.drawArc(19, 20, 26, 24, 180 * 16, 180 * 16)  # soporte
     p.drawLine(32, 44, 32, 51)                     # pie
+
+    if badge:
+        p.setPen(QPen(Qt.white, 3))
+        p.setBrush(QColor(_BADGE_COLORS[badge]))
+        p.drawEllipse(32, 32, 30, 30)  # distintivo, esquina inferior derecha
+        p.setPen(QPen(Qt.white, 5))
+        p.setBrush(Qt.NoBrush)
+        if badge == "ok":
+            # tilde ✓
+            p.drawLine(39, 47, 45, 53)
+            p.drawLine(45, 53, 55, 41)
+        else:
+            # signo de exclamación !
+            p.drawLine(47, 38, 47, 49)
+            p.setPen(Qt.NoPen)
+            p.setBrush(Qt.white)
+            p.drawEllipse(44, 52, 6, 6)
     p.end()
     return QIcon(pm)
 
@@ -85,10 +110,25 @@ class TrayApp:
         self.watcher = None
 
         self.tray = QSystemTrayIcon(_make_icon())
-        self.tray.setToolTip("Meet Transcriptions")
+        self._update_tray_status()
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    def _update_tray_status(self):
+        """Ícono con distintivo de color + tooltip según las keys configuradas."""
+        has_t = self.cfg.has_transcription_key()
+        has_m = self.cfg.has_minuta_key()
+        if has_t and has_m:
+            badge, tip = "ok", tr("tray.tip_ok")
+        elif has_t:
+            badge, tip = "warn", tr("tray.tip_no_minuta")
+        elif has_m:
+            badge, tip = "warn", tr("tray.tip_no_trans")
+        else:
+            badge, tip = "error", tr("tray.tip_no_keys")
+        self.tray.setIcon(_make_icon(badge))
+        self.tray.setToolTip(tip)
 
     def _build_menu(self):
         """(Re)arma el menú de la bandeja — se rehace si cambia el idioma."""
@@ -166,6 +206,7 @@ class TrayApp:
             self.cfg = dlg.result_config
             i18n.set_language(self.cfg.data.get("language", "auto"))
             self.log_window.setWindowTitle(tr("log.title"))
+            self._update_tray_status()
             self._build_menu()
             self._restart_watcher()
             engine.log(tr("log.settings_updated"))

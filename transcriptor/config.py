@@ -38,6 +38,8 @@ TRANSCRIPTION_PROVIDERS = [
 DIARIZATION_PROVIDERS = [
     "deepgram", "gladia", "assemblyai", "elevenlabs", "speechmatics",
 ]
+# Cualquiera de estas dos keys habilita la generación de la minuta.
+MINUTA_PROVIDERS = ["gemini", "groq"]
 ALL_PROVIDERS = TRANSCRIPTION_PROVIDERS + ["gemini"]
 
 VALID_EXTENSIONS = [".mp3", ".wav", ".m4a", ".mkv", ".mp4", ".ogg"]
@@ -103,6 +105,9 @@ class Config:
 
     def has_transcription_key(self):
         return any(self.get_key(p) for p in TRANSCRIPTION_PROVIDERS)
+
+    def has_minuta_key(self):
+        return any(self.get_key(p) for p in MINUTA_PROVIDERS)
 
     def ensure_dirs(self):
         for d in [self.audios_dir, self.transcriptions_dir,
