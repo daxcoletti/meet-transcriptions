@@ -24,6 +24,7 @@ STRINGS = {
     "tray.resume": {"es": "Reanudar procesamiento", "en": "Resume processing"},
     "tray.settings": {"es": "Configuración…", "en": "Settings…"},
     "tray.quit": {"es": "Salir", "en": "Quit"},
+    "tray.open_logs": {"es": "Abrir registros (debug)", "en": "Open logs (debug)"},
     "log.title": {"es": "Meet Transcriptions — Actividad", "en": "Meet Transcriptions — Activity"},
     "tray.tip_ok": {
         "es": "Meet Transcriptions — ✔ listo: transcripción y minuta configuradas",

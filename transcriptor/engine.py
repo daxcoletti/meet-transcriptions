@@ -46,6 +46,7 @@ RESET = "\033[0m"
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
 _log_cb = None
+_log_file = None
 
 
 def set_log_callback(cb):
@@ -54,9 +55,28 @@ def set_log_callback(cb):
     _log_cb = cb
 
 
+def enable_file_log(path):
+    """Duplica todo el log a un archivo (diagnóstico). Trunca si pasa 5 MB."""
+    global _log_file
+    try:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > 5 * 1024 * 1024:
+            path.unlink()
+        _log_file = open(path, "a", encoding="utf-8", buffering=1)
+    except OSError:
+        _log_file = None
+
+
 def log(msg=""):
+    plain = _ANSI_RE.sub("", str(msg))
+    if _log_file is not None:
+        try:
+            _log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {plain}\n")
+        except OSError:
+            pass
     if _log_cb is not None:
-        _log_cb(_ANSI_RE.sub("", str(msg)))
+        _log_cb(plain)
     else:
         print(msg)
 

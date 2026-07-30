@@ -21,6 +21,7 @@ Por plataforma:
   detecta para que la GUI avise en vez de grabar una pantalla negra.
 """
 
+import collections
 import os
 import shutil
 import subprocess
@@ -71,13 +72,22 @@ def _default_pulse_monitor():
         return None
 
 
-class _WasapiTap(threading.Thread):
-    """Graba a WAV un dispositivo de audio de Windows (mic o loopback WASAPI)."""
+class _StreamWriter(threading.Thread):
+    """Vuelca a WAV un stream de audio YA ABIERTO (mic o loopback).
 
-    def __init__(self, kind, out_path):
+    Los streams se abren secuencialmente en el hilo principal con UNA sola
+    instancia de PyAudio: Pa_Initialize no es thread-safe, y crear dos
+    instancias en hilos paralelos crashea el proceso (visto en Windows).
+    Este hilo solo hace read() → writeframes().
+    """
+
+    def __init__(self, kind, stream, out_path, channels, rate):
         super().__init__(daemon=True, name=f"audio-{kind}")
         self.kind = kind  # "mic" | "loopback"
+        self.stream = stream
         self.out_path = Path(out_path)
+        self.channels = channels
+        self.rate = rate
         self.error = None
         self._stop = threading.Event()
 
@@ -86,36 +96,16 @@ class _WasapiTap(threading.Thread):
 
     def run(self):
         try:
-            import pyaudiowpatch as pyaudio
-
-            pa = pyaudio.PyAudio()
-            try:
-                if self.kind == "loopback":
-                    dev = pa.get_default_wasapi_loopback()
-                else:
-                    dev = pa.get_default_input_device_info()
-                rate = int(dev["defaultSampleRate"])
-                channels = max(1, int(dev["maxInputChannels"]))
-                stream = pa.open(
-                    format=pyaudio.paInt16,
-                    channels=channels,
-                    rate=rate,
-                    input=True,
-                    input_device_index=dev["index"],
-                    frames_per_buffer=1024,
-                )
-                with wave.open(str(self.out_path), "wb") as wf:
-                    wf.setnchannels(channels)
-                    wf.setsampwidth(2)  # paInt16
-                    wf.setframerate(rate)
-                    while not self._stop.is_set():
-                        wf.writeframes(
-                            stream.read(1024, exception_on_overflow=False)
-                        )
-                stream.stop_stream()
-                stream.close()
-            finally:
-                pa.terminate()
+            with wave.open(str(self.out_path), "wb") as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(2)  # paInt16
+                wf.setframerate(self.rate)
+                while not self._stop.is_set():
+                    wf.writeframes(
+                        self.stream.read(1024, exception_on_overflow=False)
+                    )
+            self.stream.stop_stream()
+            self.stream.close()
         except Exception as e:
             self.error = f"{self.kind}: {e}"
 
@@ -127,7 +117,9 @@ class ScreenRecorder:
         self.cfg = cfg
         self.log = log or (lambda msg: None)
         self._proc = None
+        self._pa = None
         self._taps = []
+        self._stderr_tail = collections.deque(maxlen=60)
         self._t0 = None
         self._staging = None
         self._video_path = None
@@ -171,6 +163,7 @@ class ScreenRecorder:
         else:
             cmd = self._build_gdigrab_cmd(ffmpeg, height, fps)
 
+        self.log(f"▶ grabación ({kind}, {height}p/{fps}fps): {' '.join(cmd)}")
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -180,27 +173,92 @@ class ScreenRecorder:
             **ffmpeg_utils.SUBPROCESS_FLAGS,
         )
 
+        # Drenar stderr SIEMPRE: si nadie lee el pipe y ffmpeg escribe
+        # suficiente, se llena y ffmpeg se congela. Guardamos la cola para
+        # diagnóstico.
+        self._stderr_tail = collections.deque(maxlen=60)
+
+        def _drain(proc=self._proc, tail=self._stderr_tail):
+            for line in iter(proc.stderr.readline, b""):
+                tail.append(line.decode("utf-8", "replace"))
+
+        threading.Thread(target=_drain, daemon=True, name="ffmpeg-stderr").start()
+
         # En Windows el audio va por hilos propios (WASAPI); en X11 ya está
         # todo dentro del comando ffmpeg.
-        if kind == "windows":
-            stamp_dir = self._staging
-            if want_mic:
-                self._taps.append(_WasapiTap("mic", stamp_dir / f"mic_{stamp}.wav"))
-            if want_system:
-                self._taps.append(_WasapiTap("loopback", stamp_dir / f"sys_{stamp}.wav"))
-            for t in self._taps:
-                t.start()
+        if kind == "windows" and (want_mic or want_system):
+            self._start_windows_audio(want_mic, want_system, stamp)
 
         # Si ffmpeg muere en el arranque (args malos, display inaccesible),
         # detectarlo ya y no simular que grabamos.
         time.sleep(1.0)
         if self._proc.poll() is not None:
-            err = (self._proc.stderr.read() or b"").decode("utf-8", "replace")[-400:]
+            err = "".join(self._stderr_tail)[-400:]
             self._cleanup_taps()
             self._proc = None
             raise RecordingError(f"ffmpeg no arrancó: {err}")
 
         self._t0 = time.time()
+
+    def video_died(self):
+        """True si ffmpeg terminó solo mientras 'grabábamos' (para que la GUI
+        dispare el rescate: stop() salva lo grabado hasta el corte)."""
+        return self._proc is not None and self._proc.poll() is not None
+
+    def _start_windows_audio(self, want_mic, want_system, stamp):
+        """Abre mic y/o loopback WASAPI y lanza sus hilos de volcado.
+
+        Todo secuencial y con UNA instancia de PyAudio (Pa_Initialize no es
+        thread-safe). Cualquier fallo degrada a grabar sin ese audio, nunca
+        aborta el video.
+        """
+        try:
+            import pyaudiowpatch as pyaudio
+        except Exception as e:
+            self.log(f"⚠️  audio: PyAudioWPatch no disponible ({e}); grabo sin audio.")
+            return
+        try:
+            self._pa = pyaudio.PyAudio()
+        except Exception as e:
+            self.log(f"⚠️  audio: PortAudio no inicializó ({e}); grabo sin audio.")
+            return
+
+        wanted = []
+        if want_mic:
+            try:
+                wanted.append(("mic", self._pa.get_default_input_device_info()))
+            except Exception as e:
+                self.log(f"⚠️  sin micrófono por defecto: {e}")
+        if want_system:
+            try:
+                wanted.append(("loopback", self._pa.get_default_wasapi_loopback()))
+            except Exception as e:
+                self.log(f"⚠️  sin loopback WASAPI (audio del sistema): {e}")
+
+        for kind_a, dev in wanted:
+            try:
+                rate = int(dev["defaultSampleRate"])
+                channels = max(1, int(dev["maxInputChannels"]))
+                self.log(
+                    f"🎙 audio {kind_a}: «{dev.get('name')}» "
+                    f"(idx {dev.get('index')}, {rate} Hz, {channels} ch)"
+                )
+                stream = self._pa.open(
+                    format=pyaudio.paInt16,
+                    channels=channels,
+                    rate=rate,
+                    input=True,
+                    input_device_index=int(dev["index"]),
+                    frames_per_buffer=1024,
+                )
+                writer = _StreamWriter(
+                    kind_a, stream, self._staging / f"{kind_a}_{stamp}.wav",
+                    channels, rate,
+                )
+                writer.start()
+                self._taps.append(writer)
+            except Exception as e:
+                self.log(f"⚠️  no pude abrir el audio {kind_a}: {e}")
 
     # ------------------------------------------------------------------
     def stop(self):
@@ -234,9 +292,17 @@ class ScreenRecorder:
             elif t.out_path.exists() and t.out_path.stat().st_size > 44:
                 audio_files.append(t.out_path)
         self._taps = []
+        if self._pa is not None:
+            try:
+                self._pa.terminate()
+            except Exception:
+                pass
+            self._pa = None
 
         if not self._video_path.exists() or self._video_path.stat().st_size == 0:
-            raise RecordingError("la grabación no produjo video" + (f" ({'; '.join(errors)})" if errors else ""))
+            tail = "".join(self._stderr_tail)[-400:]
+            detail = "; ".join(errors + ([f"ffmpeg: {tail}"] if tail else []))
+            raise RecordingError("la grabación no produjo video" + (f" ({detail})" if detail else ""))
 
         if audio_files:
             merged = self._staging / f"final_{self._video_path.stem}.mkv"
@@ -257,7 +323,7 @@ class ScreenRecorder:
         w, h = screen_size
         display = os.environ.get("DISPLAY", ":0")
         cmd = [
-            ffmpeg, "-y",
+            ffmpeg, "-y", "-hide_banner", "-nostats", "-loglevel", "warning",
             "-f", "x11grab", "-framerate", str(fps),
             "-video_size", f"{w}x{h}", "-i", display,
         ]
@@ -276,7 +342,8 @@ class ScreenRecorder:
         vf = f"[0:v]scale=-2:{height}[v]"
         cmd += ["-filter_complex"]
         if audio_inputs == 2:
-            cmd += [f"{vf};[1:a][2:a]amix=inputs=2:duration=longest[a]"]
+            cmd += [f"{vf};[1:a]aresample=48000[a1];[2:a]aresample=48000[a2];"
+                    f"[a1][a2]amix=inputs=2:duration=longest[a]"]
             maps = ["-map", "[v]", "-map", "[a]"]
         elif audio_inputs == 1:
             cmd += [vf]
@@ -295,7 +362,7 @@ class ScreenRecorder:
 
     def _build_gdigrab_cmd(self, ffmpeg, height, fps):
         return [
-            ffmpeg, "-y",
+            ffmpeg, "-y", "-hide_banner", "-nostats", "-loglevel", "warning",
             "-f", "gdigrab", "-framerate", str(fps), "-i", "desktop",
             "-vf", f"scale=-2:{height}",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "30",
@@ -311,7 +378,9 @@ class ScreenRecorder:
             cmd += ["-i", str(a)]
         if len(audio_files) == 2:
             cmd += [
-                "-filter_complex", "[1:a][2:a]amix=inputs=2:duration=longest[a]",
+                "-filter_complex",
+                "[1:a]aresample=48000[a1];[2:a]aresample=48000[a2];"
+                "[a1][a2]amix=inputs=2:duration=longest[a]",
                 "-map", "0:v", "-map", "[a]",
             ]
         else:

@@ -8,6 +8,7 @@ resultados.
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
@@ -231,6 +232,11 @@ class TrayApp:
     def _rec_tick(self):
         if not (self.recorder and self.recorder.recording):
             return
+        if self.recorder.video_died():
+            # ffmpeg murió solo: rescatar lo grabado hasta el corte.
+            engine.log("⚠️  El ffmpeg de grabación terminó inesperadamente; rescato lo grabado…")
+            self._toggle_recording()  # entra por la rama de stop
+            return
         t = _fmt_elapsed(self.recorder.elapsed())
         self._spin = (self._spin + 1) % 4
         self.tray.setIcon(_make_icon("rec", self._spin))
@@ -329,6 +335,8 @@ class TrayApp:
         self.pause_action.toggled.connect(self._toggle_pause)
         menu.addAction(self.pause_action)
         menu.addAction(tr("tray.settings"), self._open_settings)
+        menu.addAction(tr("tray.open_logs"),
+                       lambda: self._open_dir(config.DATA_DIR))
         menu.addSeparator()
         if self.update_info:
             menu.addAction(
@@ -528,10 +536,39 @@ class TrayApp:
             )
 
 
+_crash_log_handle = None  # mantener la referencia viva para faulthandler
+
+
+def _enable_diagnostics():
+    """Crash log (fallos nativos con traceback) + log de la app en archivo.
+
+    Van al directorio de datos del usuario (%LOCALAPPDATA%\\MeetTranscriptions
+    en Windows, ~/.local/share/MeetTranscriptions en Linux) — accesible desde
+    el menú «Abrir registros».
+    """
+    global _crash_log_handle
+    import faulthandler
+
+    from ..config import DATA_DIR
+
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _crash_log_handle = open(DATA_DIR / "crash.log", "a", buffering=1)
+        _crash_log_handle.write(
+            f"--- inicio {__version__} {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n"
+        )
+        faulthandler.enable(_crash_log_handle)
+    except OSError:
+        pass
+    engine.enable_file_log(DATA_DIR / "app.log")
+    engine.log(f"— Meet Transcriptions {__version__} iniciada —")
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Meet Transcriptions")
     app.setQuitOnLastWindowClosed(False)
+    _enable_diagnostics()
 
     i18n.set_language(config.load().data.get("language", "auto"))
 
