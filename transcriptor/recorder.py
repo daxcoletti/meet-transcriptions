@@ -98,14 +98,35 @@ class _StreamWriter(threading.Thread):
 
     def run(self):
         try:
+            frame_bytes = self.channels * 2  # paInt16
+            written = 0
+            t0 = time.monotonic()
             with wave.open(str(self.out_path), "wb") as wf:
                 wf.setnchannels(self.channels)
-                wf.setsampwidth(2)  # paInt16
+                wf.setsampwidth(2)
                 wf.setframerate(self.rate)
                 while not self._halt.is_set():
-                    wf.writeframes(
-                        self.stream.read(1024, exception_on_overflow=False)
-                    )
+                    avail = self.stream.get_read_available()
+                    if avail > 0:
+                        n = min(avail, 4096)
+                        wf.writeframes(
+                            self.stream.read(n, exception_on_overflow=False)
+                        )
+                        written += n
+                    else:
+                        # Un loopback WASAPI NO entrega frames mientras no
+                        # suena nada: un read() acá se bloquearía para
+                        # siempre (y liberar PortAudio con un read bloqueado
+                        # tumba el proceso — visto en crash.log). Dormir y
+                        # rellenar con silencio para mantener la línea de
+                        # tiempo (que el mute no desincronice la mezcla).
+                        time.sleep(0.05)
+                        expected = int((time.monotonic() - t0) * self.rate)
+                        deficit = expected - written
+                        if deficit > self.rate // 4:  # >250 ms sin datos
+                            pad = min(deficit, self.rate)  # de a 1 s máximo
+                            wf.writeframes(b"\x00" * (pad * frame_bytes))
+                            written += pad
             self.stream.stop_stream()
             self.stream.close()
         except Exception as e:
@@ -383,10 +404,15 @@ class ScreenRecorder:
 
         audio_files = []
         errors = []
+        alive = []
         for t in self._taps:
             t.stop()
         for t in self._taps:
             t.join(timeout=10)
+            if t.is_alive():
+                # Sigue clavado en una lectura nativa: NO tocar su archivo.
+                alive.append(t.kind)
+                continue
             if t.error:
                 errors.append(t.error)
                 self.log(f"⚠️  audio {t.kind}: {t.error}")
@@ -394,10 +420,19 @@ class ScreenRecorder:
                 audio_files.append(t.out_path)
         self._taps = []
         if self._pa is not None:
-            try:
-                self._pa.terminate()
-            except Exception:
-                pass
+            if alive:
+                # Liberar PortAudio con un read() en curso = access violation
+                # (crash.log de Windows). Mejor filtrar la instancia: se va
+                # con el proceso.
+                self.log(
+                    f"⚠️  audio {', '.join(alive)} no terminó a tiempo; "
+                    f"no libero PortAudio para evitar un crash."
+                )
+            else:
+                try:
+                    self._pa.terminate()
+                except Exception:
+                    pass
             self._pa = None
 
         if not self._video_path.exists() or self._video_path.stat().st_size == 0:
