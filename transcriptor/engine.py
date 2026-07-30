@@ -70,6 +70,28 @@ def _use_tqdm():
     )
 
 
+_progress_cb = None
+
+
+def set_progress_callback(cb):
+    """La GUI registra acá su callback de progreso.
+
+    Recibe una copia del dict de progreso (archivo, etapa, segmento,
+    segmentos_total, ...) en cada actualización. Se invoca desde el hilo
+    worker: la GUI debe puentearlo con señales Qt.
+    """
+    global _progress_cb
+    _progress_cb = cb
+
+
+def _notify_progress(data):
+    if _progress_cb is not None:
+        try:
+            _progress_cb(dict(data))
+        except Exception:
+            pass
+
+
 # --- Estado configurable (se setea con configure()) ---------------------------
 CFG = None
 AUDIOS_DIR = None
@@ -194,6 +216,7 @@ class Progress:
             json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         os.replace(tmp, self.path)
+        _notify_progress(self.data)
 
 
 PROGRESS = Progress()

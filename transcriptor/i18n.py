@@ -37,6 +37,20 @@ STRINGS = {
         "es": "Meet Transcriptions — ⚠ falta una key de transcripción (Configuración)",
         "en": "Meet Transcriptions — ⚠ missing a transcription key (Settings)",
     },
+    "tray.tip_busy": {
+        "es": "Meet Transcriptions — ⚙ procesando {file}: {stage}",
+        "en": "Meet Transcriptions — ⚙ processing {file}: {stage}",
+    },
+    "stage.inicio": {"es": "iniciando", "en": "starting"},
+    "stage.segmentando audio": {"es": "segmentando el audio", "en": "segmenting audio"},
+    "stage.diarizando": {"es": "diarizando", "en": "diarizing"},
+    "stage.transcribiendo sin diarización": {
+        "es": "transcribiendo (sin diarización)",
+        "en": "transcribing (no diarization)",
+    },
+    "stage.guardando transcripción": {"es": "guardando la transcripción", "en": "saving transcript"},
+    "stage.generando minuta": {"es": "generando la minuta", "en": "writing the minutes"},
+    "stage.error": {"es": "error", "en": "error"},
     "tray.tip_no_keys": {
         "es": "Meet Transcriptions — ✘ sin API keys: no puede procesar nada (abrí Configuración)",
         "en": "Meet Transcriptions — ✘ no API keys: nothing can be processed (open Settings)",

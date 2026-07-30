@@ -48,15 +48,16 @@ def _open_external(target):
     QDesktopServices.openUrl(url)
 
 
-_BADGE_COLORS = {"ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031"}
+_BADGE_COLORS = {"ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031", "busy": "#1976d2"}
 
 
-def _make_icon(badge=None):
+def _make_icon(badge=None, spin=0):
     """Ícono de micrófono dibujado programáticamente (sin assets binarios).
 
-    badge: None | "ok" | "warn" | "error" — agrega un distintivo de color en
-    la esquina con el estado de las API keys (verde = completo, amarillo =
-    falta transcripción o minuta, rojo = sin keys).
+    badge: None | "ok" | "warn" | "error" | "busy" — distintivo de color en
+    la esquina: estado de las API keys (verde = completo, amarillo = falta
+    transcripción o minuta, rojo = sin keys) o actividad ("busy": spinner
+    azul; `spin` 0-3 rota el arco para animarlo).
     """
     pm = QPixmap(64, 64)
     pm.fill(Qt.transparent)
@@ -79,7 +80,10 @@ def _make_icon(badge=None):
         p.drawEllipse(32, 32, 30, 30)  # distintivo, esquina inferior derecha
         p.setPen(QPen(Qt.white, 5))
         p.setBrush(Qt.NoBrush)
-        if badge == "ok":
+        if badge == "busy":
+            # spinner: arco que rota según `spin`
+            p.drawArc(38, 38, 18, 18, -spin * 90 * 16, 220 * 16)
+        elif badge == "ok":
             # tilde ✓
             p.drawLine(39, 47, 45, 53)
             p.drawLine(45, 53, 55, 41)
@@ -98,6 +102,7 @@ class _Bridge(QObject):
 
     log_line = Signal(str)
     file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
+    progress = Signal(object)     # dict de progreso del engine (archivo, etapa, ...)
     update_checked = Signal(object)  # {"info": dict|None, "manual": bool, "error": str|None}
     update_ready = Signal(object)    # {"path": str|None, "error": str|None}
 
@@ -130,12 +135,21 @@ class TrayApp:
         self.bridge = _Bridge()
         self.bridge.log_line.connect(self.log_window.append)
         self.bridge.file_done.connect(self._notify_done)
+        self.bridge.progress.connect(self._on_progress)
         self.bridge.update_checked.connect(self._on_update_checked)
         self.bridge.update_ready.connect(self._on_update_ready)
         engine.set_log_callback(self.bridge.log_line.emit)
+        engine.set_progress_callback(self.bridge.progress.emit)
 
         self.watcher = None
         self.update_info = None  # release más nuevo detectado (dict de updater)
+
+        # Estado de actividad para el spinner de la bandeja
+        self._busy = None   # dict de progreso mientras procesa, None si ocioso
+        self._spin = 0
+        self._spin_timer = QTimer()
+        self._spin_timer.setInterval(350)
+        self._spin_timer.timeout.connect(self._spin_tick)
 
         self.tray = QSystemTrayIcon(_make_icon())
         self._update_tray_status()
@@ -143,8 +157,29 @@ class TrayApp:
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
 
+    # --- Actividad en la bandeja ---
+    def _on_progress(self, data):
+        """El engine avanzó de etapa: spinner + tooltip con lo que está haciendo."""
+        self._busy = data
+        stage_raw = data.get("etapa") or ""
+        stage_key = f"stage.{stage_raw}"
+        stage = tr(stage_key) if stage_key in i18n.STRINGS else stage_raw
+        seg, total = data.get("segmento"), data.get("segmentos_total")
+        if seg and total:
+            stage += f" ({seg}/{total})"
+        self.tray.setToolTip(tr("tray.tip_busy", file=data.get("archivo", "?"), stage=stage))
+        if not self._spin_timer.isActive():
+            self.tray.setIcon(_make_icon("busy", self._spin))
+            self._spin_timer.start()
+
+    def _spin_tick(self):
+        self._spin = (self._spin + 1) % 4
+        self.tray.setIcon(_make_icon("busy", self._spin))
+
     def _update_tray_status(self):
         """Ícono con distintivo de color + tooltip según las keys configuradas."""
+        if self._busy:
+            return  # procesando: el spinner y su tooltip mandan
         has_t = self.cfg.has_transcription_key()
         has_m = self.cfg.has_minuta_key()
         if has_t and has_m:
@@ -343,6 +378,10 @@ class TrayApp:
 
     # --- Notificaciones ---
     def _notify_done(self, name, status):
+        # Fin de la actividad: apagar el spinner y volver al badge de keys.
+        self._busy = None
+        self._spin_timer.stop()
+        self._update_tray_status()
         if status == "ok":
             self.tray.showMessage(
                 tr("notify.done.title"),
