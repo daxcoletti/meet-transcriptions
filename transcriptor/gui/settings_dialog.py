@@ -99,6 +99,23 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(general)
 
+        # --- Grabación de pantalla ---
+        rec_box = QGroupBox(tr("set.rec_group"))
+        rec_form = QFormLayout(rec_box)
+        self.rec_quality = QComboBox()
+        self.rec_quality.addItem(tr("set.rec_q_low"), "low")
+        self.rec_quality.addItem(tr("set.rec_q_medium"), "medium")
+        current_q = cfg.data.get("record_quality", "low")
+        self.rec_quality.setCurrentIndex(0 if current_q == "low" else 1)
+        rec_form.addRow(tr("set.rec_quality"), self.rec_quality)
+        self.rec_mic = QCheckBox(tr("set.rec_mic"))
+        self.rec_mic.setChecked(bool(cfg.data.get("record_mic", True)))
+        rec_form.addRow("", self.rec_mic)
+        self.rec_system = QCheckBox(tr("set.rec_system"))
+        self.rec_system.setChecked(bool(cfg.data.get("record_system", True)))
+        rec_form.addRow("", self.rec_system)
+        layout.addWidget(rec_box)
+
         # --- ffmpeg ---
         ffmpeg_box = QGroupBox(tr("set.ffmpeg_group"))
         fb_layout = QVBoxLayout(ffmpeg_box)
@@ -135,6 +152,9 @@ class SettingsDialog(QDialog):
         data["audios_dir"] = str(Path(self.folder_edit.text().strip()).expanduser())
         data["speechmatics_lang"] = self.lang_combo.currentText()
         data["language"] = self.ui_lang_combo.currentData()
+        data["record_quality"] = self.rec_quality.currentData()
+        data["record_mic"] = self.rec_mic.isChecked()
+        data["record_system"] = self.rec_system.isChecked()
         cfg = Config(data)
         cfg.save()
         cfg.ensure_dirs()

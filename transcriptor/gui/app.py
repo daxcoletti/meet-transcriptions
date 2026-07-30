@@ -8,6 +8,7 @@ resultados.
 import subprocess
 import sys
 import threading
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
@@ -21,10 +22,18 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, config, engine, ffmpeg_utils, i18n, updater
+from .. import recorder as recorder_mod
 from ..i18n import tr
+from ..recorder import RecordingError, ScreenRecorder
 from ..watcher import AudioWatcher
 from .settings_dialog import SettingsDialog
 from .wizard import run_wizard
+
+
+def _fmt_elapsed(seconds):
+    h, rest = divmod(int(seconds), 3600)
+    m, s = divmod(rest, 60)
+    return f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
 def _open_external(target):
@@ -48,7 +57,10 @@ def _open_external(target):
     QDesktopServices.openUrl(url)
 
 
-_BADGE_COLORS = {"ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031", "busy": "#1976d2"}
+_BADGE_COLORS = {
+    "ok": "#2e9e4f", "warn": "#f0a500", "error": "#d63031",
+    "busy": "#1976d2", "rec": "#e02b2b",
+}
 
 
 def _make_icon(badge=None, spin=0):
@@ -80,7 +92,16 @@ def _make_icon(badge=None, spin=0):
         p.drawEllipse(32, 32, 30, 30)  # distintivo, esquina inferior derecha
         p.setPen(QPen(Qt.white, 5))
         p.setBrush(Qt.NoBrush)
-        if badge == "busy":
+        if badge == "rec":
+            # punto de grabación: alterna lleno/anillo para "pulsar"
+            if spin % 2 == 0:
+                p.setPen(Qt.NoPen)
+                p.setBrush(Qt.white)
+                p.drawEllipse(41, 41, 12, 12)
+            else:
+                p.setPen(QPen(Qt.white, 3))
+                p.drawEllipse(42, 42, 10, 10)
+        elif badge == "busy":
             # spinner: arco que rota según `spin`
             p.drawArc(38, 38, 18, 18, -spin * 90 * 16, 220 * 16)
         elif badge == "ok":
@@ -103,6 +124,7 @@ class _Bridge(QObject):
     log_line = Signal(str)
     file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
     progress = Signal(object)     # dict de progreso del engine (archivo, etapa, ...)
+    record_done = Signal(object)  # {"path": str|None, "error": str|None}
     update_checked = Signal(object)  # {"info": dict|None, "manual": bool, "error": str|None}
     update_ready = Signal(object)    # {"path": str|None, "error": str|None}
 
@@ -136,6 +158,7 @@ class TrayApp:
         self.bridge.log_line.connect(self.log_window.append)
         self.bridge.file_done.connect(self._notify_done)
         self.bridge.progress.connect(self._on_progress)
+        self.bridge.record_done.connect(self._on_record_done)
         self.bridge.update_checked.connect(self._on_update_checked)
         self.bridge.update_ready.connect(self._on_update_ready)
         engine.set_log_callback(self.bridge.log_line.emit)
@@ -151,16 +174,101 @@ class TrayApp:
         self._spin_timer.setInterval(350)
         self._spin_timer.timeout.connect(self._spin_tick)
 
+        # Grabación de pantalla
+        self.recorder = None
+        self._rec_timer = QTimer()
+        self._rec_timer.setInterval(1000)
+        self._rec_timer.timeout.connect(self._rec_tick)
+
         self.tray = QSystemTrayIcon(_make_icon())
         self._update_tray_status()
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
 
+    # --- Grabación de pantalla ---
+    def _toggle_recording(self):
+        if self.recorder and self.recorder.recording:
+            # Detener: el mux/mover puede tardar unos segundos → hilo aparte.
+            self._rec_timer.stop()
+            self.record_action.setText(tr("rec.stopping"))
+            self.record_action.setEnabled(False)
+            rec = self.recorder
+
+            def worker():
+                try:
+                    path = rec.stop()
+                    self.bridge.record_done.emit({"path": str(path), "error": None})
+                except Exception as e:
+                    self.bridge.record_done.emit({"path": None, "error": str(e)})
+
+            threading.Thread(target=worker, daemon=True).start()
+            return
+
+        kind = recorder_mod.session_kind()
+        if kind == "wayland":
+            QMessageBox.information(None, "Meet Transcriptions", tr("rec.wayland"))
+            return
+
+        self.recorder = ScreenRecorder(self.cfg, log=engine.log)
+        size = None
+        if kind == "x11":
+            screen = self.app.primaryScreen()
+            geo = screen.virtualGeometry()
+            ratio = screen.devicePixelRatio()
+            size = (int(geo.width() * ratio), int(geo.height() * ratio))
+        try:
+            self.recorder.start(screen_size=size)
+        except RecordingError as e:
+            msg = tr("rec.wayland") if str(e) == "wayland" else tr("rec.failed", err=e)
+            engine.log(msg)
+            QMessageBox.warning(None, "Meet Transcriptions", msg)
+            self.recorder = None
+            return
+        self._rec_timer.start()
+        self._rec_tick()
+
+    def _rec_tick(self):
+        if not (self.recorder and self.recorder.recording):
+            return
+        t = _fmt_elapsed(self.recorder.elapsed())
+        self._spin = (self._spin + 1) % 4
+        self.tray.setIcon(_make_icon("rec", self._spin))
+        self.tray.setToolTip(tr("rec.tip", time=t))
+        self.record_action.setText(tr("rec.stop", time=t))
+
+    def _on_record_done(self, result):
+        self.record_action.setEnabled(True)
+        self.record_action.setText(tr("rec.start"))
+        self.recorder = None
+        self._update_tray_status_or_busy()
+        if result["error"]:
+            engine.log(tr("rec.failed", err=result["error"]))
+            self.tray.showMessage(
+                "Meet Transcriptions", tr("rec.failed", err=result["error"]),
+                QSystemTrayIcon.Warning, 10000,
+            )
+        else:
+            name = Path(result["path"]).name
+            engine.log(tr("rec.saved", name=name))
+            # El watcher ve el archivo movido y arranca la transcripción solo.
+
+    def _recording_active(self):
+        return bool(self.recorder and self.recorder.recording)
+
+    def _update_tray_status_or_busy(self):
+        """Restablece el ícono al estado que corresponda (procesando o keys)."""
+        if self._busy:
+            self._on_progress(self._busy)
+        else:
+            self._update_tray_status()
+
     # --- Actividad en la bandeja ---
     def _on_progress(self, data):
         """El engine avanzó de etapa: spinner + tooltip con lo que está haciendo."""
         self._busy = data
+        if self._recording_active():
+            return  # el punto rojo de grabación tiene prioridad visual
         stage_raw = data.get("etapa") or ""
         stage_key = f"stage.{stage_raw}"
         stage = tr(stage_key) if stage_key in i18n.STRINGS else stage_raw
@@ -178,8 +286,8 @@ class TrayApp:
 
     def _update_tray_status(self):
         """Ícono con distintivo de color + tooltip según las keys configuradas."""
-        if self._busy:
-            return  # procesando: el spinner y su tooltip mandan
+        if self._busy or self._recording_active():
+            return  # procesando o grabando: ese estado manda
         has_t = self.cfg.has_transcription_key()
         has_m = self.cfg.has_minuta_key()
         if has_t and has_m:
@@ -196,6 +304,14 @@ class TrayApp:
     def _build_menu(self):
         """(Re)arma el menú de la bandeja — se rehace si cambia el idioma."""
         menu = QMenu()
+        self.record_action = QAction(tr("rec.start"))
+        if self.recorder and self.recorder.recording:
+            self.record_action.setText(
+                tr("rec.stop", time=_fmt_elapsed(self.recorder.elapsed()))
+            )
+        self.record_action.triggered.connect(self._toggle_recording)
+        menu.addAction(self.record_action)
+        menu.addSeparator()
         menu.addAction(tr("tray.activity"), self._show_log)
         menu.addSeparator()
         menu.addAction(tr("tray.open_recordings"),
@@ -250,6 +366,13 @@ class TrayApp:
         self.start()
 
     def _quit(self):
+        if self._recording_active():
+            # Cerrar con gracia: finalizar el MKV y moverlo a la carpeta
+            # vigilada; se transcribe en el próximo arranque (barrido inicial).
+            try:
+                self.recorder.stop()
+            except Exception:
+                pass
         if self.watcher:
             self.watcher.stop()
         self.tray.hide()

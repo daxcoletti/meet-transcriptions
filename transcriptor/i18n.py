@@ -89,6 +89,35 @@ STRINGS = {
         "en": "{name}: the transcript is done, but the minutes were not generated. Add a Gemini or Groq API key in Settings.",
     },
 
+    # --- Grabación de pantalla ---
+    "rec.start": {"es": "🔴 Grabar pantalla", "en": "🔴 Record screen"},
+    "rec.stop": {"es": "⏹ Detener grabación ({time})", "en": "⏹ Stop recording ({time})"},
+    "rec.stopping": {"es": "⏳ Guardando grabación…", "en": "⏳ Saving recording…"},
+    "rec.tip": {
+        "es": "Meet Transcriptions — ⏺ grabando pantalla ({time})",
+        "en": "Meet Transcriptions — ⏺ recording screen ({time})",
+    },
+    "rec.saved": {
+        "es": "⏺ Grabación guardada: {name} — entra al pipeline de transcripción.",
+        "en": "⏺ Recording saved: {name} — entering the transcription pipeline.",
+    },
+    "rec.failed": {"es": "❌ La grabación falló: {err}", "en": "❌ Recording failed: {err}"},
+    "rec.wayland": {
+        "es": "La grabación de pantalla en sesiones Wayland llega en una próxima "
+              "versión. Podés iniciar sesión con 'Ubuntu en Xorg' para usarla hoy.",
+        "en": "Screen recording on Wayland sessions is coming in a future version. "
+              "You can log in with an Xorg session to use it today.",
+    },
+    "set.rec_group": {"es": "Grabación de pantalla", "en": "Screen recording"},
+    "set.rec_quality": {"es": "Calidad:", "en": "Quality:"},
+    "set.rec_q_low": {"es": "Baja (480p, 2 fps) — recomendada", "en": "Low (480p, 2 fps) — recommended"},
+    "set.rec_q_medium": {"es": "Media (720p, 5 fps)", "en": "Medium (720p, 5 fps)"},
+    "set.rec_mic": {"es": "Grabar micrófono", "en": "Record microphone"},
+    "set.rec_system": {
+        "es": "Grabar audio del sistema (lo que se escucha, p.ej. la reunión)",
+        "en": "Record system audio (what you hear, e.g. the meeting)",
+    },
+
     # --- Actualizaciones ---
     "upd.menu_check": {"es": "Buscar actualizaciones", "en": "Check for updates"},
     "upd.menu_update": {"es": "⬆ Actualizar a la versión {version}", "en": "⬆ Update to version {version}"},

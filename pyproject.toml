@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meet-transcriptions"
-version = "2.3.4"
+version = "2.4.0"
 description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización + minuta)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,8 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# GUI de escritorio (bandeja del sistema + wizard de configuración)
-gui = ["PySide6>=6.6"]
+# GUI de escritorio (bandeja del sistema + wizard de configuración).
+# PyAudioWPatch: loopback WASAPI para grabar el audio del sistema en Windows.
+gui = ["PySide6>=6.6", 'PyAudioWPatch; sys_platform == "win32"']
 # Barra de progreso en el modo CLI
 cli = ["tqdm"]
 

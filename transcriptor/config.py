@@ -50,6 +50,10 @@ _DEFAULTS = {
     "speechmatics_lang": "en",
     "ffmpeg_path": "",  # vacío = autodetectar (PATH o descarga propia)
     "language": "auto",  # idioma de la interfaz: "auto" | "es" | "en"
+    # Grabación de pantalla integrada
+    "record_quality": "low",  # "low" (480p/2fps) | "medium" (720p/5fps)
+    "record_mic": True,       # grabar micrófono
+    "record_system": True,    # grabar audio del sistema (lo que se escucha)
 }
 
 
