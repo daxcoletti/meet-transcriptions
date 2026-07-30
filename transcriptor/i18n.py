@@ -375,6 +375,16 @@ STRINGS = {
 
     # --- Configuración ---
     "set.title": {"es": "Meet Transcriptions — Configuración", "en": "Meet Transcriptions — Settings"},
+    "set.sec_keys": {"es": "🔑  API keys", "en": "🔑  API keys"},
+    "set.sec_general": {"es": "⚙️  General", "en": "⚙️  General"},
+    "set.sec_recording": {"es": "🔴  Grabación", "en": "🔴  Recording"},
+    "set.sec_ffmpeg": {"es": "🛠  ffmpeg", "en": "🛠  ffmpeg"},
+    "set.keys_hint": {
+        "es": "Los nombres de los servicios son enlaces para registrarse gratis. "
+              "Transcripción: al menos una key. Minuta: Gemini o Groq.",
+        "en": "Service names are links to sign up for free. "
+              "Transcription: at least one key. Minutes: Gemini or Groq.",
+    },
     "set.keys_group": {
         "es": "API keys (los nombres son enlaces para registrarse)",
         "en": "API keys (names are sign-up links)",

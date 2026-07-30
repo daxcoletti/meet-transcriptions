@@ -93,6 +93,7 @@ class KeysForm(QWidget):
 
         edit = QLineEdit()
         edit.setEchoMode(QLineEdit.Password)
+        edit.setMinimumWidth(160)
         edit.setPlaceholderText(tr("keys.placeholder"))
         edit.textChanged.connect(self.changed)
         self.edits[pid] = edit

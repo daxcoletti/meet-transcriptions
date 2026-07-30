@@ -1,8 +1,15 @@
-"""Diálogo de Configuración: keys, carpeta, accesos directos, idioma, autostart."""
+"""Diálogo de Configuración: secciones a la izquierda, opciones a la derecha.
+
+Antes era una sola página apilada que obligaba a scrollear en un espacio
+mínimo (sobre todo las API keys). Ahora: QListWidget (secciones) +
+QStackedWidget (una página por sección), con las keys ocupando todo el
+panel derecho.
+"""
 
 import os
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,14 +18,16 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from .. import autostart, shortcuts
@@ -31,30 +40,71 @@ SPEECHMATICS_LANGS = ["en", "es", "pt", "fr", "de", "it"]
 UI_LANGS = [("auto", None), ("es", "Español"), ("en", "English")]
 
 
+def _page(title_key, hint_key=None):
+    """Página base de una sección: título en negrita + hint opcional."""
+    w = QWidget()
+    layout = QVBoxLayout(w)
+    title = QLabel(f"<h3>{tr(title_key)}</h3>")
+    layout.addWidget(title)
+    if hint_key:
+        hint = QLabel(tr(hint_key))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: gray;")
+        layout.addWidget(hint)
+    return w, layout
+
+
 class SettingsDialog(QDialog):
     def __init__(self, cfg, parent=None):
         super().__init__(parent)
         self.setWindowTitle(tr("set.title"))
-        self.setMinimumSize(780, 680)
+        self.setMinimumSize(900, 620)
         self._base = cfg
         self.result_config = None
 
-        layout = QVBoxLayout(self)
+        root = QVBoxLayout(self)
+        body = QHBoxLayout()
 
-        # --- API keys ---
-        keys_box = QGroupBox(tr("set.keys_group"))
+        self.sections = QListWidget()
+        self.sections.setFixedWidth(190)
+        self.stack = QStackedWidget()
+
+        for label_key, builder in [
+            ("set.sec_keys", self._build_keys_page),
+            ("set.sec_general", self._build_general_page),
+            ("set.sec_recording", self._build_recording_page),
+            ("set.sec_ffmpeg", self._build_ffmpeg_page),
+        ]:
+            self.sections.addItem(tr(label_key))
+            self.stack.addWidget(builder(cfg))
+
+        self.sections.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.sections.setCurrentRow(0)
+
+        body.addWidget(self.sections)
+        body.addWidget(self.stack, 1)
+        root.addLayout(body, 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        root.addWidget(buttons)
+
+    # ------------------------------------------------------------------
+    def _build_keys_page(self, cfg):
+        page, layout = _page("set.sec_keys", "set.keys_hint")
         self.keys_form = KeysForm()
         self.keys_form.set_keys(cfg.api_keys)
         scroll = QScrollArea()
         scroll.setWidget(self.keys_form)
         scroll.setWidgetResizable(True)
-        kb_layout = QVBoxLayout(keys_box)
-        kb_layout.addWidget(scroll)
-        layout.addWidget(keys_box, 1)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        layout.addWidget(scroll, 1)
+        return page
 
-        # --- Opciones generales ---
-        general = QGroupBox(tr("set.general"))
-        form = QFormLayout(general)
+    def _build_general_page(self, cfg):
+        page, layout = _page("set.sec_general")
+        form = QFormLayout()
 
         self.folder_edit = QLineEdit(str(cfg.audios_dir))
         browse = QPushButton(tr("wiz.folder.browse"))
@@ -64,7 +114,6 @@ class SettingsDialog(QDialog):
         folder_row.addWidget(browse)
         form.addRow(tr("set.folder"), folder_row)
 
-        # Accesos directos a la carpeta (efecto inmediato, con feedback en el botón)
         self.desktop_btn = QPushButton(tr("set.make_desktop"))
         self.desktop_btn.clicked.connect(
             lambda: self._make_shortcut(self.desktop_btn, shortcuts.create_desktop_link)
@@ -80,13 +129,6 @@ class SettingsDialog(QDialog):
         sc_row.addStretch(1)
         form.addRow(tr("set.shortcuts"), sc_row)
 
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItems(SPEECHMATICS_LANGS)
-        if cfg.speechmatics_lang in SPEECHMATICS_LANGS:
-            self.lang_combo.setCurrentText(cfg.speechmatics_lang)
-        self.lang_combo.setToolTip(tr("set.lang_speechmatics_tip"))
-        form.addRow(tr("set.lang_speechmatics"), self.lang_combo)
-
         self.ui_lang_combo = QComboBox()
         for value, label in UI_LANGS:
             self.ui_lang_combo.addItem(label or tr("lang.auto"), value)
@@ -94,6 +136,13 @@ class SettingsDialog(QDialog):
         idx = next((i for i, (v, _) in enumerate(UI_LANGS) if v == current), 0)
         self.ui_lang_combo.setCurrentIndex(idx)
         form.addRow(tr("set.ui_lang"), self.ui_lang_combo)
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItems(SPEECHMATICS_LANGS)
+        if cfg.speechmatics_lang in SPEECHMATICS_LANGS:
+            self.lang_combo.setCurrentText(cfg.speechmatics_lang)
+        self.lang_combo.setToolTip(tr("set.lang_speechmatics_tip"))
+        form.addRow(tr("set.lang_speechmatics"), self.lang_combo)
 
         self.autostart_check = QCheckBox(tr("set.autostart"))
         self.autostart_check.setChecked(autostart.is_enabled())
@@ -104,49 +153,55 @@ class SettingsDialog(QDialog):
         self.debug_check.setToolTip(tr("set.debug_log_tip"))
         form.addRow("", self.debug_check)
 
-        layout.addWidget(general)
+        layout.addLayout(form)
+        layout.addStretch(1)
+        return page
 
-        # --- Grabación de pantalla ---
-        rec_box = QGroupBox(tr("set.rec_group"))
-        rec_form = QFormLayout(rec_box)
-        self.rec_quality = QComboBox()
-        self.rec_quality.addItem(tr("set.rec_q_low"), "low")
-        self.rec_quality.addItem(tr("set.rec_q_medium"), "medium")
-        current_q = cfg.data.get("record_quality", "low")
-        self.rec_quality.setCurrentIndex(0 if current_q == "low" else 1)
-        rec_form.addRow(tr("set.rec_quality"), self.rec_quality)
-        self.rec_mic = QCheckBox(tr("set.rec_mic"))
-        self.rec_mic.setChecked(bool(cfg.data.get("record_mic", True)))
-        rec_form.addRow("", self.rec_mic)
-        self.rec_system = QCheckBox(tr("set.rec_system"))
-        self.rec_system.setChecked(bool(cfg.data.get("record_system", True)))
-        rec_form.addRow("", self.rec_system)
+    def _build_recording_page(self, cfg):
+        page, layout = _page("set.sec_recording")
+        form = QFormLayout()
 
+        # El atajo primero: es lo que más se busca acá.
         self.hotkey_edit = QKeySequenceEdit(
             QKeySequence(cfg.data.get("record_hotkey", ""))
         )
-        self.hotkey_edit.setToolTip(tr("set.hotkey_tip"))
         hotkey_clear = QPushButton(tr("set.hotkey_clear"))
         hotkey_clear.clicked.connect(self.hotkey_edit.clear)
         hk_row = QHBoxLayout()
         hk_row.addWidget(self.hotkey_edit, 1)
         hk_row.addWidget(hotkey_clear)
-        rec_form.addRow(tr("set.hotkey"), hk_row)
-        layout.addWidget(rec_box)
+        form.addRow(tr("set.hotkey"), hk_row)
+        hk_hint = QLabel(tr("set.hotkey_tip"))
+        hk_hint.setWordWrap(True)
+        hk_hint.setStyleSheet("color: gray;")
+        form.addRow("", hk_hint)
 
-        # --- ffmpeg ---
-        ffmpeg_box = QGroupBox(tr("set.ffmpeg_group"))
-        fb_layout = QVBoxLayout(ffmpeg_box)
-        fb_layout.addWidget(FFmpegStatusWidget(cfg))
-        layout.addWidget(ffmpeg_box)
+        self.rec_quality = QComboBox()
+        self.rec_quality.addItem(tr("set.rec_q_low"), "low")
+        self.rec_quality.addItem(tr("set.rec_q_medium"), "medium")
+        current_q = cfg.data.get("record_quality", "low")
+        self.rec_quality.setCurrentIndex(0 if current_q == "low" else 1)
+        form.addRow(tr("set.rec_quality"), self.rec_quality)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self.rec_mic = QCheckBox(tr("set.rec_mic"))
+        self.rec_mic.setChecked(bool(cfg.data.get("record_mic", True)))
+        form.addRow("", self.rec_mic)
 
+        self.rec_system = QCheckBox(tr("set.rec_system"))
+        self.rec_system.setChecked(bool(cfg.data.get("record_system", True)))
+        form.addRow("", self.rec_system)
+
+        layout.addLayout(form)
+        layout.addStretch(1)
+        return page
+
+    def _build_ffmpeg_page(self, cfg):
+        page, layout = _page("set.sec_ffmpeg")
+        layout.addWidget(FFmpegStatusWidget(cfg))
+        layout.addStretch(1)
+        return page
+
+    # ------------------------------------------------------------------
     def _browse(self):
         d = QFileDialog.getExistingDirectory(
             self, tr("wiz.folder.dialog"), self.folder_edit.text()
