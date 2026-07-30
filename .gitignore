@@ -34,3 +34,9 @@ __pycache__/
 
 # Herramientas
 .kimi/
+
+# Artefactos de empaquetado
+build/
+dist/
+packaging/Output/
+packaging/windows/icon.ico

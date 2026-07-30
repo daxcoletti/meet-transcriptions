@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meet-transcriptions"
+version = "2.0.0"
+description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización + minuta)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "TRANS-IT Foundation" }]
+dependencies = [
+    "requests",
+    "langdetect",
+    "filelock",
+    "platformdirs",
+    "watchdog",
+]
+
+[project.optional-dependencies]
+# GUI de escritorio (bandeja del sistema + wizard de configuración)
+gui = ["PySide6>=6.6"]
+# Barra de progreso en el modo CLI
+cli = ["tqdm"]
+
+[project.scripts]
+meet-transcriptions-cli = "transcriptor.cli:main"
+
+[project.gui-scripts]
+meet-transcriptions = "transcriptor.gui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["transcriptor*"]

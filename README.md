@@ -2,6 +2,27 @@
 
 Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) que rota entre varias APIs gratuitas para esquivar los límites de cuota individuales, genera transcripción con diarización (identificación de hablantes) y una **minuta** en Markdown.
 
+Funciona en **dos modos**:
+
+- **App de escritorio** (Windows y Linux): vive en la bandeja del sistema, vigila la carpeta de grabaciones con eventos nativos del sistema de archivos (inotify / ReadDirectoryChangesW vía `watchdog`, sin polling) y procesa cada audio nuevo apenas termina de copiarse. Incluye un **wizard de primera ejecución** que verifica/descarga ffmpeg y pide las API keys, y una ventana de **Configuración** para cambiarlas después.
+- **CLI por cron** (el modo histórico): una pasada por invocación; cada instancia toma un archivo, lo procesa y termina.
+
+## Estructura
+
+```
+transcriptor/            paquete principal
+├── engine.py            motor: segmentación, proveedores, diarización, minuta
+├── config.py            config.json en ~/.config/MeetTranscriptions (o %APPDATA%)
+├── watcher.py           vigilancia por eventos (watchdog) + worker
+├── cli.py               modo cron (locks multiplataforma con filelock)
+├── ffmpeg_utils.py      detección y descarga automática de ffmpeg
+├── validators.py        prueba liviana de cada API key
+├── autostart.py         arranque con la sesión (registro Run / autostart .desktop)
+└── gui/                 PySide6: bandeja, wizard, configuración, registro
+packaging/               PyInstaller (.spec) + Inno Setup (.iss) + ícono
+super_transcriptor_v2.py wrapper de compatibilidad para el cron existente
+```
+
 ## Cómo funciona
 
 1. Escanea un directorio de audios (`/home/dax/Audios` por defecto).
@@ -25,18 +46,18 @@ Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) q
 
 El idioma de la minuta se detecta automáticamente con `langdetect`.
 
-### Diseño para correr por cron
+### Detección de archivos nuevos
 
-El script se ejecuta cada minuto vía cron. Para evitar que dos instancias procesen el mismo archivo (gastando cuota gratuita 2×) usa **locks por archivo** con `fcntl.flock`:
-
-- Cada instancia toma **un único archivo**, lo procesa y termina.
-- Si hay un segundo archivo, la siguiente instancia (el próximo minuto, o una en paralelo) lo toma sin pisar el primero.
-- Los locks viven en `/tmp/transcripcion_locks/<sha1>.lock` y se liberan al terminar (o al morir el proceso, por el comportamiento de `flock`).
+- **App de escritorio**: `watchdog` se suscribe a los eventos nativos del sistema de archivos (inotify en Linux, ReadDirectoryChangesW en Windows), así no hay polling. Antes de procesar espera a que el tamaño del archivo se estabilice (las grabaciones se copian de a poco). Al arrancar hace un barrido único por si llegaron archivos con la app cerrada. Un solo hilo worker procesa en serie, así que no hacen falta locks.
+- **Modo cron**: el script se ejecuta cada minuto. Para evitar que dos instancias procesen el mismo archivo (gastando cuota gratuita 2×) usa **locks por archivo** con `filelock` (multiplataforma):
+  - Cada instancia toma **un único archivo**, lo procesa y termina.
+  - Si hay un segundo archivo, la siguiente instancia (el próximo minuto, o una en paralelo) lo toma sin pisar el primero.
+  - Los locks viven en `<tmp del sistema>/transcripcion_locks/<sha1>.lock` y se liberan al terminar (o al morir el proceso).
 
 ## Requisitos
 
-- Linux con `ffmpeg` instalado (`apt install ffmpeg`)
-- Python 3.10+
+- Windows o Linux con `ffmpeg` (en la app de escritorio, el wizard lo detecta y ofrece descargarlo automáticamente; en Linux también sirve `apt install ffmpeg`)
+- Python 3.10+ (solo para correr desde código; el instalador de Windows ya incluye todo)
 - Cuentas gratuitas en al menos uno de:
   - [Groq](https://console.groq.com/) (transcripción Whisper + LLM para la minuta)
   - [Gladia](https://www.gladia.io/) (transcripción + diarización)
@@ -46,7 +67,35 @@ El script se ejecuta cada minuto vía cron. Para evitar que dos instancias proce
   - [Speechmatics](https://www.speechmatics.com/) (transcripción + diarización; idioma fijo por job, ver `SPEECHMATICS_LANG`)
 - Opcional para la minuta: [Google Gemini](https://aistudio.google.com/) (1M de contexto; primario si está presente)
 
-## Instalación
+## Instalación — App de escritorio
+
+### Windows (instalador)
+
+Descargar y ejecutar `MeetTranscriptions-Setup-<versión>.exe`. El instalador (Inno Setup, en español) no pide administrador. En el primer arranque, un asistente:
+
+1. verifica **ffmpeg** y, si falta, ofrece **descargarlo con un clic** (no viene embebido en el instalador);
+2. pide las **API keys** (cada servicio con su enlace de registro y botón «Probar» que valida la key);
+3. deja elegir la **carpeta de grabaciones** y si arranca con Windows.
+
+Para **construir** el instalador (en una máquina Windows):
+
+```powershell
+pip install ".[gui]" pyinstaller
+python packaging\make_icon.py            # genera windows\icon.ico
+pyinstaller packaging\transcriptor.spec  # genera dist\MeetTranscriptions\ (onedir)
+# Compilar packaging\installer.iss con Inno Setup 6 → Output\MeetTranscriptions-Setup-*.exe
+```
+
+### Linux (app de escritorio)
+
+```bash
+pip install ".[gui]"      # o pipx install ".[gui]"
+meet-transcriptions        # abre el wizard la primera vez y queda en la bandeja
+```
+
+Opcional: copiar `packaging/linux/meet-transcriptions.desktop` a `~/.local/share/applications/` para tenerla en el menú de aplicaciones. El arranque automático se activa desde la propia app (Configuración).
+
+## Instalación — Modo CLI/cron (histórico)
 
 ```bash
 git clone git@github.com:daxcoletti/meet-transcriptions.git
@@ -54,12 +103,14 @@ cd meet-transcriptions
 
 python3 -m venv venv
 source venv/bin/activate
-pip install requests tqdm langdetect
+pip install requests tqdm langdetect filelock platformdirs watchdog
 ```
 
 ## Configuración
 
-1. **API keys**: cada proveedor lee su key desde un archivo en la raíz del repo (que está en `.gitignore`):
+La configuración vive en `config.json` dentro del directorio estándar del usuario (`~/.config/MeetTranscriptions/` en Linux, `%APPDATA%\MeetTranscriptions\` en Windows). La app de escritorio lo administra desde el wizard/Configuración; en modo CLI se puede editar a mano.
+
+1. **API keys**: van en `config.json` (`"api_keys": {"groq": "...", ...}`). *Compatibilidad*: si no existe `config.json`, se leen los archivos legacy `<proveedor>.key` de la raíz del repo, como siempre:
 
    ```bash
    echo "tu-groq-api-key"       > groq.key
@@ -71,12 +122,12 @@ pip install requests tqdm langdetect
    echo "tu-gemini-api-key"       > gemini.key
    ```
 
-   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La diarización requiere `deepgram.key`, `gladia.key`, `assemblyai.key`, `elevenlabs.key` o `speechmatics.key`. La minuta usa `gemini.key` si está (primario) y si no `groq.key` (map-reduce).
+   Solo hace falta tener al menos uno; los faltantes se omiten automáticamente. La diarización requiere key de Deepgram, Gladia, AssemblyAI, ElevenLabs o Speechmatics. La minuta usa Gemini si está (primario) y si no Groq (map-reduce).
 
-2. **Rutas** (editar al inicio de `super_transcriptor_v2.py` si querés otras):
+2. **Rutas**: la carpeta vigilada se define en `config.json` (`"audios_dir"`); por defecto:
 
    ```python
-   AUDIOS_DIR          = Path("/home/dax/Audios")
+   AUDIOS_DIR          = Path.home() / "Audios"
    TRANSCRIPTIONS_DIR  = AUDIOS_DIR / "transcriptions"
    PROCESSED_DIR       = AUDIOS_DIR / "procesados"
    MINUTAS_DIR         = AUDIOS_DIR / "Minutas"
@@ -85,14 +136,14 @@ pip install requests tqdm langdetect
 
    Las carpetas y el log se crean solos en la primera corrida.
 
-## Uso manual
+## Uso manual (CLI)
 
 ```bash
 source venv/bin/activate
-python super_transcriptor_v2.py
+python super_transcriptor_v2.py      # o: python -m transcriptor --cli
 ```
 
-Procesa **un** archivo y termina (por diseño, para que múltiples instancias paralelas tomen distintos archivos).
+Procesa **un** archivo y termina (por diseño, para que múltiples instancias paralelas tomen distintos archivos). Los locks entre instancias son multiplataforma (`filelock`).
 
 ## Uso por cron (recomendado)
 
