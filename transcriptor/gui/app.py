@@ -272,6 +272,18 @@ class TrayApp:
             15000,
         )
 
+    def _confirm_update(self, info):
+        """Diálogo de confirmación previo: nada se instala sin un OK explícito."""
+        box = QMessageBox(
+            QMessageBox.Question,
+            tr("upd.confirm.title"),
+            tr("upd.confirm.body", version=info["version"], current=__version__),
+        )
+        yes = box.addButton(tr("upd.confirm.yes"), QMessageBox.AcceptRole)
+        box.addButton(tr("upd.confirm.no"), QMessageBox.RejectRole)
+        box.exec()
+        return box.clickedButton() is yes
+
     def _start_update(self):
         info = self.update_info
         if not info:
@@ -279,6 +291,8 @@ class TrayApp:
         if not updater.can_self_update() or not info.get("installer_url"):
             # Desde código (Linux/dev) no hay auto-update: abrir el release.
             QDesktopServices.openUrl(QUrl(info["page_url"]))
+            return
+        if not self._confirm_update(info):
             return
         engine.log(tr("upd.downloading", version=info["version"]))
 

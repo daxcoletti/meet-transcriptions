@@ -11,7 +11,7 @@
 ; muestra antes de instalar).
 
 #define MyAppName "Meet Transcriptions"
-#define MyAppVersion "2.3.0"
+#define MyAppVersion "2.3.1"
 #define MyAppPublisher "TRANS-IT Foundation"
 #define MyAppExeName "MeetTranscriptions.exe"
 
@@ -33,7 +33,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
-; Auto-actualización: la app lanza este Setup con /VERYSILENT y se cierra.
+; Auto-actualización: previa confirmación del usuario, la app lanza este
+; Setup con /SILENT (progreso visible, sin wizard) y se cierra.
 ; force = cerrar la app si sigue corriendo; el relanzamiento lo hace la
 ; entrada [Run] postinstall (sin skipifsilent), así que RestartApplications
 ; queda en no para no abrirla dos veces.

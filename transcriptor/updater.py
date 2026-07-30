@@ -2,11 +2,11 @@
 
 - check_latest() consulta el último release publicado y lo compara con la
   versión local.
-- En Windows empaquetado (Inno Setup), la actualización es automática:
-  se descarga el Setup nuevo y se ejecuta con /VERYSILENT; el instalador
-  cierra la app (CloseApplications=force), reemplaza los archivos y la
-  vuelve a abrir ([Run] postinstall sin skipifsilent). El usuario no hace
-  nada.
+- En Windows empaquetado (Inno Setup), la actualización se aplica previa
+  confirmación del usuario: se descarga el Setup nuevo y se ejecuta con
+  /SILENT (muestra la ventana de progreso, sin páginas de wizard); el
+  instalador cierra la app (CloseApplications=force), reemplaza los
+  archivos y la vuelve a abrir ([Run] postinstall sin skipifsilent).
 - Corriendo desde código (Linux/dev) solo se notifica y se abre la página
   del release.
 """
@@ -92,19 +92,21 @@ def download_installer(url, progress_cb=None):
 
 
 def launch_installer(path):
-    """Lanza el Setup en modo silencioso, desacoplado de este proceso.
+    """Lanza el Setup desacoplado de este proceso.
+
+    /SILENT (una sola barra de progreso visible, sin wizard) y no
+    /VERYSILENT: el usuario ya confirmó en la app, pero tiene que VER que
+    la actualización está ocurriendo.
 
     Quien llama debe cerrar la app inmediatamente después: el instalador
     reemplaza los archivos y la vuelve a abrir solo.
     """
     flags = {}
     if os.name == "nt":
-        # Que sobreviva al cierre de la app y no muestre consola.
-        flags["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        )
+        # Que sobreviva al cierre de la app.
+        flags["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(
-        [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+        [str(path), "/SILENT", "/NORESTART"],
         close_fds=True,
         **flags,
     )

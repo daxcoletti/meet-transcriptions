@@ -92,6 +92,23 @@ STRINGS = {
         "es": "No se pudo buscar actualizaciones: {err}",
         "en": "Could not check for updates: {err}",
     },
+    "upd.confirm.title": {"es": "Actualizar Meet Transcriptions", "en": "Update Meet Transcriptions"},
+    "upd.confirm.body": {
+        "es": (
+            "¿Instalar la versión {version} ahora? (tenés la {current})\n\n"
+            "Se descarga el instalador, la aplicación se cierra durante la "
+            "actualización (vas a ver la barra de progreso) y se vuelve a "
+            "abrir sola al terminar."
+        ),
+        "en": (
+            "Install version {version} now? (you have {current})\n\n"
+            "The installer will be downloaded, the application will close "
+            "during the update (you will see the progress bar) and it will "
+            "reopen by itself when done."
+        ),
+    },
+    "upd.confirm.yes": {"es": "Actualizar ahora", "en": "Update now"},
+    "upd.confirm.no": {"es": "Ahora no", "en": "Not now"},
     "upd.downloading": {
         "es": "⬇ Descargando la actualización {version}…",
         "en": "⬇ Downloading update {version}…",
