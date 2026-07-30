@@ -178,4 +178,4 @@ Mientras una instancia procesa un audio va actualizando `progress/instancia_<pid
 
 ## Licencia
 
-Uso personal.
+[GNU GPL v3](LICENSE) (o, a tu opción, cualquier versión posterior). Software libre: podés usarlo, estudiarlo, modificarlo y redistribuirlo bajo los términos de la licencia.

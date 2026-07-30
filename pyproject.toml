@@ -8,7 +8,7 @@ version = "2.3.1"
 description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización + minuta)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "TRANS-IT Foundation" }]
 dependencies = [
     "requests",
