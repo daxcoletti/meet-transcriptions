@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meet-transcriptions"
-version = "2.2.0"
+version = "2.3.0"
 description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización + minuta)"
 readme = "README.md"
 requires-python = ">=3.10"

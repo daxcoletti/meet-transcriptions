@@ -11,7 +11,7 @@
 ; muestra antes de instalar).
 
 #define MyAppName "Meet Transcriptions"
-#define MyAppVersion "2.2.0"
+#define MyAppVersion "2.3.0"
 #define MyAppPublisher "TRANS-IT Foundation"
 #define MyAppExeName "MeetTranscriptions.exe"
 
@@ -33,6 +33,12 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
+; Auto-actualización: la app lanza este Setup con /VERYSILENT y se cierra.
+; force = cerrar la app si sigue corriendo; el relanzamiento lo hace la
+; entrada [Run] postinstall (sin skipifsilent), así que RestartApplications
+; queda en no para no abrirla dos veces.
+CloseApplications=force
+RestartApplications=no
 
 ; El instalador se muestra en el idioma del Windows del usuario; el texto
 ; informativo previo (ffmpeg + API keys) también va por idioma.
@@ -51,7 +57,8 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; Sin skipifsilent: tras una actualización silenciosa la app se reabre sola.
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall
 
 [UninstallRun]
 ; Quitar el autostart que la app registra en HKCU\...\Run al configurarse.

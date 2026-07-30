@@ -6,8 +6,9 @@ resultados.
 """
 
 import sys
+import threading
 
-from PySide6.QtCore import QObject, Qt, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from .. import config, engine, i18n
+from .. import __version__, config, engine, i18n, updater
 from ..i18n import tr
 from ..watcher import AudioWatcher
 from .settings_dialog import SettingsDialog
@@ -75,6 +76,8 @@ class _Bridge(QObject):
 
     log_line = Signal(str)
     file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
+    update_checked = Signal(object)  # {"info": dict|None, "manual": bool, "error": str|None}
+    update_ready = Signal(object)    # {"path": str|None, "error": str|None}
 
 
 class LogWindow(QMainWindow):
@@ -105,9 +108,12 @@ class TrayApp:
         self.bridge = _Bridge()
         self.bridge.log_line.connect(self.log_window.append)
         self.bridge.file_done.connect(self._notify_done)
+        self.bridge.update_checked.connect(self._on_update_checked)
+        self.bridge.update_ready.connect(self._on_update_ready)
         engine.set_log_callback(self.bridge.log_line.emit)
 
         self.watcher = None
+        self.update_info = None  # release más nuevo detectado (dict de updater)
 
         self.tray = QSystemTrayIcon(_make_icon())
         self._update_tray_status()
@@ -151,6 +157,15 @@ class TrayApp:
         menu.addAction(self.pause_action)
         menu.addAction(tr("tray.settings"), self._open_settings)
         menu.addSeparator()
+        if self.update_info:
+            menu.addAction(
+                tr("upd.menu_update", version=self.update_info["version"]),
+                self._start_update,
+            )
+        else:
+            menu.addAction(
+                tr("upd.menu_check"), lambda: self._check_updates(manual=True)
+            )
         menu.addAction(tr("tray.quit"), self._quit)
         self._menu = menu  # mantener referencia (Qt no la retiene)
         self.tray.setContextMenu(menu)
@@ -164,6 +179,13 @@ class TrayApp:
         self.watcher = AudioWatcher(self.cfg, on_file_done=self.bridge.file_done.emit)
         self.watcher.start()
         engine.log(tr("log.watching", dir=self.cfg.audios_dir))
+
+        # Buscar actualizaciones: a los 15 s del arranque y luego cada 24 h.
+        QTimer.singleShot(15_000, lambda: self._check_updates(manual=False))
+        self._update_timer = QTimer()
+        self._update_timer.setInterval(24 * 60 * 60 * 1000)
+        self._update_timer.timeout.connect(lambda: self._check_updates(manual=False))
+        self._update_timer.start()
 
     def _restart_watcher(self):
         if self.watcher:
@@ -210,6 +232,78 @@ class TrayApp:
             self._build_menu()
             self._restart_watcher()
             engine.log(tr("log.settings_updated"))
+
+    # --- Actualizaciones ---
+    def _check_updates(self, manual=False):
+        def worker():
+            try:
+                info = updater.check_latest()
+                self.bridge.update_checked.emit(
+                    {"info": info, "manual": manual, "error": None}
+                )
+            except Exception as e:
+                self.bridge.update_checked.emit(
+                    {"info": None, "manual": manual, "error": str(e)}
+                )
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_checked(self, result):
+        if result["error"]:
+            if result["manual"]:
+                engine.log(tr("upd.error", err=result["error"]))
+            return  # chequeo automático fallido: silencioso (sin red, etc.)
+        info = result["info"]
+        if info is None:
+            if result["manual"]:
+                self.tray.showMessage(
+                    tr("upd.none.title"),
+                    tr("upd.none.body", current=__version__),
+                    QSystemTrayIcon.Information,
+                    6000,
+                )
+            return
+        self.update_info = info
+        self._build_menu()  # el ítem pasa a "Actualizar a la versión X"
+        self.tray.showMessage(
+            tr("upd.available.title"),
+            tr("upd.available.body", version=info["version"], current=__version__),
+            QSystemTrayIcon.Information,
+            15000,
+        )
+
+    def _start_update(self):
+        info = self.update_info
+        if not info:
+            return
+        if not updater.can_self_update() or not info.get("installer_url"):
+            # Desde código (Linux/dev) no hay auto-update: abrir el release.
+            QDesktopServices.openUrl(QUrl(info["page_url"]))
+            return
+        engine.log(tr("upd.downloading", version=info["version"]))
+
+        def worker():
+            try:
+                path = updater.download_installer(info["installer_url"])
+                self.bridge.update_ready.emit({"path": str(path), "error": None})
+            except Exception as e:
+                self.bridge.update_ready.emit({"path": None, "error": str(e)})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_ready(self, result):
+        if result["error"]:
+            engine.log(tr("upd.dl_error", err=result["error"]))
+            return
+        self.tray.showMessage(
+            tr("upd.installing.title"),
+            tr("upd.installing.body"),
+            QSystemTrayIcon.Information,
+            8000,
+        )
+        engine.log(tr("upd.installing.body"))
+        updater.launch_installer(result["path"])
+        self._quit()  # el instalador reemplaza los archivos y reabre la app
 
     # --- Notificaciones ---
     def _notify_done(self, name, status):

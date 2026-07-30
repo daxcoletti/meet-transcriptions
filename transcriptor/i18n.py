@@ -75,6 +75,37 @@ STRINGS = {
         "en": "{name}: the transcript is done, but the minutes were not generated. Add a Gemini or Groq API key in Settings.",
     },
 
+    # --- Actualizaciones ---
+    "upd.menu_check": {"es": "Buscar actualizaciones", "en": "Check for updates"},
+    "upd.menu_update": {"es": "⬆ Actualizar a la versión {version}", "en": "⬆ Update to version {version}"},
+    "upd.available.title": {"es": "Actualización disponible", "en": "Update available"},
+    "upd.available.body": {
+        "es": "Salió la versión {version} (tenés la {current}). Actualizá desde el menú del ícono de la bandeja.",
+        "en": "Version {version} is out (you have {current}). Update from the tray icon menu.",
+    },
+    "upd.none.title": {"es": "Sin novedades", "en": "No updates"},
+    "upd.none.body": {
+        "es": "Ya estás en la última versión ({current}).",
+        "en": "You are already on the latest version ({current}).",
+    },
+    "upd.error": {
+        "es": "No se pudo buscar actualizaciones: {err}",
+        "en": "Could not check for updates: {err}",
+    },
+    "upd.downloading": {
+        "es": "⬇ Descargando la actualización {version}…",
+        "en": "⬇ Downloading update {version}…",
+    },
+    "upd.installing.title": {"es": "Actualizando", "en": "Updating"},
+    "upd.installing.body": {
+        "es": "La aplicación se va a cerrar, actualizar y reabrir sola en unos segundos.",
+        "en": "The application will close, update and reopen by itself in a few seconds.",
+    },
+    "upd.dl_error": {
+        "es": "❌ La descarga de la actualización falló: {err}",
+        "en": "❌ The update download failed: {err}",
+    },
+
     # --- Formulario de keys ---
     "keys.section_transcription": {
         "es": "🎙 Transcripción — se necesita AL MENOS UNA",
