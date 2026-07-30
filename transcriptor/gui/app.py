@@ -357,6 +357,9 @@ class TrayApp:
         engine.configure(self.cfg)
         if engine.FFMPEG is None:
             engine.log(tr("log.no_ffmpeg"))
+        # Rescatar grabaciones interrumpidas ANTES de arrancar el watcher,
+        # así los archivos recuperados entran por el barrido inicial.
+        recorder_mod.recover_orphans(self.cfg, log=engine.log)
         self.watcher = AudioWatcher(self.cfg, on_file_done=self.bridge.file_done.emit)
         self.watcher.start()
         engine.log(tr("log.watching", dir=self.cfg.audios_dir))

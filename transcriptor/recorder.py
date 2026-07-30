@@ -89,10 +89,12 @@ class _StreamWriter(threading.Thread):
         self.channels = channels
         self.rate = rate
         self.error = None
-        self._stop = threading.Event()
+        # OJO: no llamar "_stop" a este atributo — Thread tiene un método
+        # privado _stop() que join() invoca; pisarlo rompe al detener.
+        self._halt = threading.Event()
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
     def run(self):
         try:
@@ -100,7 +102,7 @@ class _StreamWriter(threading.Thread):
                 wf.setnchannels(self.channels)
                 wf.setsampwidth(2)  # paInt16
                 wf.setframerate(self.rate)
-                while not self._stop.is_set():
+                while not self._halt.is_set():
                     wf.writeframes(
                         self.stream.read(1024, exception_on_overflow=False)
                     )
@@ -108,6 +110,61 @@ class _StreamWriter(threading.Thread):
             self.stream.close()
         except Exception as e:
             self.error = f"{self.kind}: {e}"
+
+
+def recover_orphans(cfg, log=None):
+    """Rescata grabaciones que quedaron en .grabando/ por un crash o cierre.
+
+    Se llama al iniciar la app (antes de cualquier grabación nueva, así no
+    hay riesgo de tocar una grabación activa). Si hay WAVs de audio junto al
+    video, intenta muxearlos; si no se puede, salva el video solo.
+    """
+    log = log or (lambda m: None)
+    staging = cfg.audios_dir / STAGING_DIRNAME
+    if not staging.is_dir():
+        return
+
+    # Mux ya hecho pero move interrumpido
+    for f in sorted(staging.glob("final_*.mkv")):
+        stamp = f.stem.replace("final_video_", "")
+        target = cfg.audios_dir / f"Grabacion_recuperada_{stamp}.mkv"
+        try:
+            shutil.move(str(f), str(target))
+            log(f"♻️  Grabación recuperada: {target.name}")
+        except OSError as e:
+            log(f"⚠️  no pude recuperar {f.name}: {e}")
+
+    for v in sorted(staging.glob("video_*.mkv")):
+        if v.stat().st_size == 0:
+            continue
+        stamp = v.stem.replace("video_", "")
+        wavs = sorted(
+            p for p in staging.glob(f"*_{stamp}.wav") if p.stat().st_size > 44
+        )
+        target = cfg.audios_dir / f"Grabacion_recuperada_{stamp}.mkv"
+        out = v
+        if wavs:
+            rec = ScreenRecorder(cfg, log=log)
+            rec._video_path = v
+            rec._staging = staging
+            try:
+                merged = staging / f"rescate_{stamp}.mkv"
+                rec._mux(wavs[:2], merged)
+                out = merged
+            except Exception as e:
+                log(f"⚠️  recuperación: no pude unir el audio ({e}); salvo solo el video.")
+        try:
+            shutil.move(str(out), str(target))
+            log(f"♻️  Grabación recuperada: {target.name}")
+        except OSError as e:
+            log(f"⚠️  no pude recuperar {v.name}: {e}")
+
+    # Limpiar sobras (WAVs sueltos, temporales)
+    for f in staging.glob("*"):
+        try:
+            f.unlink()
+        except OSError:
+            pass
 
 
 class ScreenRecorder:
