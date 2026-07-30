@@ -47,6 +47,7 @@ _DEFAULTS = {
     "api_keys": {},
     "speechmatics_lang": "en",
     "ffmpeg_path": "",  # vacío = autodetectar (PATH o descarga propia)
+    "language": "auto",  # idioma de la interfaz: "auto" | "es" | "en"
 }
 
 

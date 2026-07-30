@@ -4,7 +4,7 @@ Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) q
 
 Funciona en **dos modos**:
 
-- **App de escritorio** (Windows y Linux): vive en la bandeja del sistema, vigila la carpeta de grabaciones con eventos nativos del sistema de archivos (inotify / ReadDirectoryChangesW vía `watchdog`, sin polling) y procesa cada audio nuevo apenas termina de copiarse. Incluye un **wizard de primera ejecución** que verifica/descarga ffmpeg y pide las API keys, y una ventana de **Configuración** para cambiarlas después.
+- **App de escritorio** (Windows y Linux): vive en la bandeja del sistema, vigila la carpeta de grabaciones con eventos nativos del sistema de archivos (inotify / ReadDirectoryChangesW vía `watchdog`, sin polling) y procesa cada audio nuevo apenas termina de copiarse. Incluye un **wizard de primera ejecución** que verifica/descarga ffmpeg, pide las API keys (separando qué hace falta para transcribir y qué para la **minuta**: Gemini o Groq) y ofrece dejar la carpeta **anclada al explorador y con acceso directo en el Escritorio**, para que el drag & drop sea obvio. Interfaz **bilingüe** (castellano/inglés, auto-detecta el idioma del sistema). La ventana de **Configuración** permite cambiar todo después.
 - **CLI por cron** (el modo histórico): una pasada por invocación; cada instancia toma un archivo, lo procesa y termina.
 
 ## Estructura

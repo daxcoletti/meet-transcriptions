@@ -18,7 +18,8 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from .. import config, engine
+from .. import config, engine, i18n
+from ..i18n import tr
 from ..watcher import AudioWatcher
 from .settings_dialog import SettingsDialog
 from .wizard import run_wizard
@@ -48,13 +49,13 @@ class _Bridge(QObject):
     """Puentea callbacks de hilos worker hacia el hilo de la GUI."""
 
     log_line = Signal(str)
-    file_done = Signal(str, bool)
+    file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
 
 
 class LogWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Meet Transcriptions — Actividad")
+        self.setWindowTitle(tr("log.title"))
         self.resize(820, 480)
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
@@ -83,43 +84,46 @@ class TrayApp:
 
         self.watcher = None
 
-        icon = _make_icon()
-        self.tray = QSystemTrayIcon(icon)
+        self.tray = QSystemTrayIcon(_make_icon())
         self.tray.setToolTip("Meet Transcriptions")
-
-        menu = QMenu()
-        menu.addAction("Ver actividad", self._show_log)
-        menu.addSeparator()
-        menu.addAction("Abrir carpeta de grabaciones",
-                       lambda: self._open_dir(self.cfg.audios_dir))
-        menu.addAction("Abrir transcripciones",
-                       lambda: self._open_dir(self.cfg.transcriptions_dir))
-        menu.addAction("Abrir minutas",
-                       lambda: self._open_dir(self.cfg.minutas_dir))
-        menu.addSeparator()
-        self.pause_action = QAction("Pausar procesamiento")
-        self.pause_action.setCheckable(True)
-        self.pause_action.toggled.connect(self._toggle_pause)
-        menu.addAction(self.pause_action)
-        menu.addAction("Configuración…", self._open_settings)
-        menu.addSeparator()
-        menu.addAction("Salir", self._quit)
-        self.tray.setContextMenu(menu)
+        self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    def _build_menu(self):
+        """(Re)arma el menú de la bandeja — se rehace si cambia el idioma."""
+        menu = QMenu()
+        menu.addAction(tr("tray.activity"), self._show_log)
+        menu.addSeparator()
+        menu.addAction(tr("tray.open_recordings"),
+                       lambda: self._open_dir(self.cfg.audios_dir))
+        menu.addAction(tr("tray.open_transcriptions"),
+                       lambda: self._open_dir(self.cfg.transcriptions_dir))
+        menu.addAction(tr("tray.open_minutas"),
+                       lambda: self._open_dir(self.cfg.minutas_dir))
+        menu.addSeparator()
+        self.pause_action = QAction(tr("tray.pause"))
+        self.pause_action.setCheckable(True)
+        if self.watcher and self.watcher.paused:
+            self.pause_action.setChecked(True)
+            self.pause_action.setText(tr("tray.resume"))
+        self.pause_action.toggled.connect(self._toggle_pause)
+        menu.addAction(self.pause_action)
+        menu.addAction(tr("tray.settings"), self._open_settings)
+        menu.addSeparator()
+        menu.addAction(tr("tray.quit"), self._quit)
+        self._menu = menu  # mantener referencia (Qt no la retiene)
+        self.tray.setContextMenu(menu)
 
     # --- Ciclo de vida ---
     def start(self):
         self.cfg.ensure_dirs()
         engine.configure(self.cfg)
         if engine.FFMPEG is None:
-            engine.log(
-                "⚠️  ffmpeg no está disponible: los audios nuevos van a "
-                "fallar hasta instalarlo (ver Configuración)."
-            )
+            engine.log(tr("log.no_ffmpeg"))
         self.watcher = AudioWatcher(self.cfg, on_file_done=self.bridge.file_done.emit)
         self.watcher.start()
-        engine.log(f"👀 Vigilando {self.cfg.audios_dir} (eventos nativos del sistema).")
+        engine.log(tr("log.watching", dir=self.cfg.audios_dir))
 
     def _restart_watcher(self):
         if self.watcher:
@@ -151,31 +155,41 @@ class TrayApp:
             return
         if checked:
             self.watcher.pause()
-            self.pause_action.setText("Reanudar procesamiento")
+            self.pause_action.setText(tr("tray.resume"))
         else:
             self.watcher.resume()
-            self.pause_action.setText("Pausar procesamiento")
+            self.pause_action.setText(tr("tray.pause"))
 
     def _open_settings(self):
         dlg = SettingsDialog(self.cfg, None)
         if dlg.exec() and dlg.result_config:
             self.cfg = dlg.result_config
+            i18n.set_language(self.cfg.data.get("language", "auto"))
+            self.log_window.setWindowTitle(tr("log.title"))
+            self._build_menu()
             self._restart_watcher()
-            engine.log("⚙️  Configuración actualizada.")
+            engine.log(tr("log.settings_updated"))
 
     # --- Notificaciones ---
-    def _notify_done(self, name, ok):
-        if ok:
+    def _notify_done(self, name, status):
+        if status == "ok":
             self.tray.showMessage(
-                "Transcripción lista",
-                f"{name}: transcripción y minuta generadas.",
+                tr("notify.done.title"),
+                tr("notify.done.body", name=name),
                 QSystemTrayIcon.Information,
                 8000,
             )
+        elif status == "ok_no_minuta":
+            self.tray.showMessage(
+                tr("notify.nominuta.title"),
+                tr("notify.nominuta.body", name=name),
+                QSystemTrayIcon.Warning,
+                15000,
+            )
         else:
             self.tray.showMessage(
-                "Transcripción fallida",
-                f"{name}: no se pudo procesar (ver actividad).",
+                tr("notify.fail.title"),
+                tr("notify.fail.body", name=name),
                 QSystemTrayIcon.Warning,
                 8000,
             )
@@ -186,11 +200,10 @@ def main():
     app.setApplicationName("Meet Transcriptions")
     app.setQuitOnLastWindowClosed(False)
 
+    i18n.set_language(config.load().data.get("language", "auto"))
+
     if not QSystemTrayIcon.isSystemTrayAvailable():
-        QMessageBox.critical(
-            None, "Meet Transcriptions",
-            "No hay bandeja del sistema disponible en este entorno."
-        )
+        QMessageBox.critical(None, "Meet Transcriptions", tr("app.no_tray"))
         return 1
 
     if config.is_first_run():
@@ -200,6 +213,7 @@ def main():
     else:
         cfg = config.load()
 
+    i18n.set_language(cfg.data.get("language", "auto"))
     tray_app = TrayApp(app, cfg)
     tray_app.start()
     return app.exec()

@@ -17,6 +17,7 @@ from watchdog.observers import Observer
 
 from . import engine
 from .config import VALID_EXTENSIONS
+from .i18n import tr
 
 _STOP = object()
 
@@ -40,7 +41,8 @@ class AudioWatcher:
 
     Callbacks (se invocan desde el hilo worker — la GUI debe puentearlos
     con señales Qt):
-      on_file_done(nombre, ok): terminó de procesar un archivo.
+      on_file_done(nombre, status): terminó de procesar un archivo;
+      status es "ok", "ok_no_minuta" o "fail".
     """
 
     def __init__(self, cfg, on_file_done=None):
@@ -80,11 +82,11 @@ class AudioWatcher:
 
     def pause(self):
         self._paused.set()
-        engine.log("⏸  Procesamiento en pausa.")
+        engine.log(tr("log.paused"))
 
     def resume(self):
         self._paused.clear()
-        engine.log("▶️  Procesamiento reanudado.")
+        engine.log(tr("log.resumed"))
 
     @property
     def paused(self):
@@ -121,10 +123,10 @@ class AudioWatcher:
         if not path.exists() or path.name in engine.load_processed_set():
             return
 
-        ok = engine.run_one(path)
+        status = engine.run_one(path) or "fail"
         if self.on_file_done:
             try:
-                self.on_file_done(path.name, ok)
+                self.on_file_done(path.name, status)
             except Exception:
                 pass
 

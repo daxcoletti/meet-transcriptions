@@ -11,7 +11,7 @@
 ; muestra antes de instalar).
 
 #define MyAppName "Meet Transcriptions"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "TRANS-IT Foundation"
 #define MyAppExeName "MeetTranscriptions.exe"
 
@@ -26,7 +26,6 @@ PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-InfoBeforeFile=windows\INFO_INSTALACION.txt
 OutputDir=Output
 OutputBaseFilename=MeetTranscriptions-Setup-{#MyAppVersion}
 SetupIconFile=windows\icon.ico
@@ -35,8 +34,11 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
+; El instalador se muestra en el idioma del Windows del usuario; el texto
+; informativo previo (ffmpeg + API keys) también va por idioma.
 [Languages]
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "windows\INFO_INSTALL_EN.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "windows\INFO_INSTALACION.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

@@ -894,6 +894,14 @@ def generate_minuta(transcript_text, filename):
     if not transcript_text.strip():
         return None
 
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
+        log(
+            f"{YELLOW}⚠️  Minuta omitida: no hay API key de Gemini ni de Groq. "
+            f"La transcripción no la necesita, pero la minuta sí — cargá una "
+            f"de las dos en la configuración.{RESET}"
+        )
+        return None
+
     detected_lang = _detect_lang(transcript_text)
 
     # 0) Gemini primero: el transcript completo entra en una sola llamada.
@@ -926,7 +934,13 @@ def generate_minuta(transcript_text, filename):
 
 
 def process_file(file_path):
-    """Procesa un audio. Devuelve True si terminó bien, False si falló."""
+    """Procesa un audio.
+
+    Devuelve (todos truthy salvo el fallo):
+      "ok"           → transcripción y minuta generadas
+      "ok_no_minuta" → transcripción lista pero la minuta no se pudo generar
+      False          → falló (el archivo NO se mueve a procesados)
+    """
     log(f"\n{YELLOW}📂 Procesando:{RESET} {file_path.name}")
     PROGRESS.update(etapa="segmentando audio")
 
@@ -1086,7 +1100,9 @@ def process_file(file_path):
         for f in segments:
             f.unlink()
         temp_dir.rmdir()
-        return overall_success
+        if overall_success:
+            return "ok" if minuta else "ok_no_minuta"
+        return False
 
     # ------------------------------------------------------------------
     # 3) Diarización exitosa: generar VTT + TXT
@@ -1129,7 +1145,7 @@ def process_file(file_path):
     for f in segments:
         f.unlink()
     temp_dir.rmdir()
-    return True
+    return "ok" if minuta else "ok_no_minuta"
 
 
 # --- Helpers compartidos por el modo cron (cli) y el watcher (GUI) ------------
@@ -1162,15 +1178,18 @@ def pending_files():
 
 
 def run_one(file_path):
-    """Procesa un archivo manejando el registro de progreso. Devuelve True/False."""
+    """Procesa un archivo manejando el registro de progreso.
+
+    Devuelve lo mismo que process_file: "ok", "ok_no_minuta" o False.
+    """
     PROGRESS.start(file_path.name)
     try:
-        ok = process_file(file_path)
-        if ok:
+        status = process_file(file_path)
+        if status:
             PROGRESS.finish()
         # Si process_file devolvió False, ya registró el error y el archivo
         # de progreso queda en disco para diagnóstico.
-        return ok
+        return status
     except Exception:
         PROGRESS.fail(traceback.format_exc())
         log(f"{RED}❌ Excepción procesando {file_path.name}:{RESET}\n{traceback.format_exc()}")

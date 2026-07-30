@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import ffmpeg_utils
+from ..i18n import tr
 
 
 class _Downloader(QThread):
@@ -54,9 +55,9 @@ class FFmpegStatusWidget(QWidget):
         layout.addWidget(self.hint_label)
 
         buttons = QHBoxLayout()
-        self.download_btn = QPushButton("⬇ Descargar ffmpeg automáticamente")
+        self.download_btn = QPushButton(tr("ff.download"))
         self.download_btn.clicked.connect(self._start_download)
-        self.recheck_btn = QPushButton("Volver a comprobar")
+        self.recheck_btn = QPushButton(tr("ff.recheck"))
         self.recheck_btn.clicked.connect(self.refresh)
         buttons.addWidget(self.download_btn)
         buttons.addWidget(self.recheck_btn)
@@ -73,30 +74,18 @@ class FFmpegStatusWidget(QWidget):
         self.found_path = ffmpeg_utils.find_ffmpeg(self.cfg)
         if self.found_path:
             self.status_label.setText(
-                f'<span style="color:green">✔ ffmpeg encontrado:</span> '
+                f'<span style="color:green">{tr("ff.found")}</span> '
                 f"<code>{self.found_path}</code>"
             )
             self.hint_label.setText("")
             self.download_btn.setVisible(False)
         else:
             self.status_label.setText(
-                '<span style="color:red">✘ No se encontró ffmpeg.</span> '
-                "La aplicación lo necesita para extraer y segmentar el audio."
+                f'<span style="color:red">{tr("ff.missing")}</span>'
             )
-            if os.name == "nt":
-                hint = (
-                    "Podés descargarlo automáticamente con el botón de abajo "
-                    "(build oficial de gyan.dev, ~90 MB), o instalarlo vos "
-                    "mismo y volver a comprobar."
-                )
-            else:
-                hint = (
-                    "Instalalo con tu gestor de paquetes (p.ej. "
-                    "<code>sudo apt install ffmpeg</code>) y tocá "
-                    "«Volver a comprobar», o usá la descarga automática "
-                    "(build estático de johnvansickle.com)."
-                )
-            self.hint_label.setText(hint)
+            self.hint_label.setText(
+                tr("ff.hint_win" if os.name == "nt" else "ff.hint_linux")
+            )
             self.download_btn.setVisible(ffmpeg_utils.download_url() is not None)
         self.status_changed.emit(bool(self.found_path))
 
@@ -128,5 +117,5 @@ class FFmpegStatusWidget(QWidget):
         self.download_btn.setEnabled(True)
         self.recheck_btn.setEnabled(True)
         self.status_label.setText(
-            f'<span style="color:red">✘ La descarga falló:</span> {msg}'
+            f'<span style="color:red">{tr("ff.dl_failed")}</span> {msg}'
         )

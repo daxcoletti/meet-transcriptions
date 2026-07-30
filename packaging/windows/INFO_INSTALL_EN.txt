@@ -1,0 +1,37 @@
+MEET TRANSCRIPTIONS
+===================
+
+This application watches a recordings folder and automatically generates a
+transcript (with speaker identification) and meeting minutes in Markdown for
+every new audio file, using the FREE tiers of several services.
+
+Before using it you will need two things (the application guides you through
+both with a first-run wizard):
+
+1) FFMPEG
+   The application uses ffmpeg (free, open-source software) to extract and
+   segment audio. It is NOT bundled with this installer: on first run the
+   application detects it if you already have it, and offers a one-click
+   automatic download if it is missing.
+
+2) FREE API KEYS
+   You need to sign up (free) for at least one of these transcription
+   services and paste its API key into the wizard:
+
+     - Deepgram        https://console.deepgram.com/
+     - Gladia          https://app.gladia.io/
+     - AssemblyAI      https://www.assemblyai.com/
+     - ElevenLabs      https://elevenlabs.io/
+     - Speechmatics    https://portal.speechmatics.com/
+     - Groq            https://console.groq.com/
+
+   IMPORTANT — for the minutes (summary, decisions, action items) you also
+   need a key from ONE of these:
+     - Google Gemini   https://aistudio.google.com/   (recommended)
+     - Groq            https://console.groq.com/
+
+   The more keys you add, the more total free quota the application can
+   rotate through when a service hits its limit.
+
+No data leaves your computer except the audio sent to the transcription
+services you configure.

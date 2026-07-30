@@ -8,6 +8,8 @@ check_key devuelve (ok, mensaje):
 
 import requests
 
+from .i18n import tr
+
 _CHECKS = {
     "groq": lambda k: requests.get(
         "https://api.groq.com/openai/v1/models",
@@ -43,16 +45,16 @@ _CHECKS = {
 def check_key(provider, key):
     fn = _CHECKS.get(provider)
     if fn is None or not key:
-        return None, "Sin verificación disponible"
+        return None, tr("val.unavailable")
     try:
         res = fn(key.strip())
     except requests.RequestException as e:
-        return None, f"No se pudo verificar (red): {e.__class__.__name__}"
+        return None, tr("val.neterr", err=e.__class__.__name__)
     if res.status_code == 200:
-        return True, "Key válida"
+        return True, tr("val.valid")
     if res.status_code in (401, 403):
-        return False, f"Key rechazada ({res.status_code})"
+        return False, tr("val.rejected", code=res.status_code)
     # Gemini responde 400 ante keys malformadas.
     if provider == "gemini" and res.status_code == 400:
-        return False, "Key rechazada (400)"
-    return None, f"Respuesta inesperada ({res.status_code})"
+        return False, tr("val.rejected", code=400)
+    return None, tr("val.unexpected", code=res.status_code)
