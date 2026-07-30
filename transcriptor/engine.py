@@ -68,6 +68,16 @@ def enable_file_log(path):
         _log_file = None
 
 
+def disable_file_log():
+    global _log_file
+    if _log_file is not None:
+        try:
+            _log_file.close()
+        except OSError:
+            pass
+        _log_file = None
+
+
 def log(msg=""):
     plain = _ANSI_RE.sub("", str(msg))
     if _log_file is not None:

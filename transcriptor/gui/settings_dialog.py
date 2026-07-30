@@ -97,6 +97,11 @@ class SettingsDialog(QDialog):
         self.autostart_check.setChecked(autostart.is_enabled())
         form.addRow("", self.autostart_check)
 
+        self.debug_check = QCheckBox(tr("set.debug_log"))
+        self.debug_check.setChecked(bool(cfg.data.get("debug_log", True)))
+        self.debug_check.setToolTip(tr("set.debug_log_tip"))
+        form.addRow("", self.debug_check)
+
         layout.addWidget(general)
 
         # --- Grabación de pantalla ---
@@ -155,6 +160,7 @@ class SettingsDialog(QDialog):
         data["record_quality"] = self.rec_quality.currentData()
         data["record_mic"] = self.rec_mic.isChecked()
         data["record_system"] = self.rec_system.isChecked()
+        data["debug_log"] = self.debug_check.isChecked()
         cfg = Config(data)
         cfg.save()
         cfg.ensure_dirs()

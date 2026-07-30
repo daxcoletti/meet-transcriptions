@@ -356,6 +356,14 @@ STRINGS = {
     },
     "set.ui_lang": {"es": "Idioma de la interfaz:", "en": "Interface language:"},
     "set.autostart": {"es": "Iniciar al encender el equipo", "en": "Start when the computer starts"},
+    "set.debug_log": {
+        "es": "Guardar registro de diagnóstico (app.log)",
+        "en": "Keep diagnostic log (app.log)",
+    },
+    "set.debug_log_tip": {
+        "es": "Sin impacto perceptible en el rendimiento (unas líneas de texto por archivo procesado). Útil para reportar problemas.",
+        "en": "No perceptible performance impact (a few text lines per processed file). Useful for reporting problems.",
+    },
     "set.shortcuts": {"es": "Accesos a la carpeta:", "en": "Folder shortcuts:"},
     "set.make_desktop": {"es": "Crear acceso en el Escritorio", "en": "Create Desktop shortcut"},
     "set.make_pin_win": {"es": "Anclar al Acceso rápido", "en": "Pin to Quick access"},

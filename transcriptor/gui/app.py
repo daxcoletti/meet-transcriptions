@@ -414,6 +414,7 @@ class TrayApp:
         dlg = SettingsDialog(self.cfg, None)
         if dlg.exec() and dlg.result_config:
             self.cfg = dlg.result_config
+            apply_debug_log_setting(self.cfg)
             i18n.set_language(self.cfg.data.get("language", "auto"))
             self.log_window.setWindowTitle(tr("log.title"))
             self._update_tray_status()
@@ -539,12 +540,14 @@ class TrayApp:
 _crash_log_handle = None  # mantener la referencia viva para faulthandler
 
 
-def _enable_diagnostics():
+def _enable_diagnostics(cfg):
     """Crash log (fallos nativos con traceback) + log de la app en archivo.
 
     Van al directorio de datos del usuario (%LOCALAPPDATA%\\MeetTranscriptions
     en Windows, ~/.local/share/MeetTranscriptions en Linux) — accesible desde
-    el menú «Abrir registros».
+    el menú «Abrir registros». El crash.log va siempre (faulthandler no
+    cuesta nada hasta que hay un crash); el app.log se puede apagar en
+    Configuración ("debug_log").
     """
     global _crash_log_handle
     import faulthandler
@@ -560,15 +563,26 @@ def _enable_diagnostics():
         faulthandler.enable(_crash_log_handle)
     except OSError:
         pass
-    engine.enable_file_log(DATA_DIR / "app.log")
+    if cfg.data.get("debug_log", True):
+        engine.enable_file_log(DATA_DIR / "app.log")
     engine.log(f"— Meet Transcriptions {__version__} iniciada —")
+
+
+def apply_debug_log_setting(cfg):
+    """Prende/apaga el app.log en caliente según la config."""
+    from ..config import DATA_DIR
+
+    if cfg.data.get("debug_log", True):
+        engine.enable_file_log(DATA_DIR / "app.log")
+    else:
+        engine.disable_file_log()
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Meet Transcriptions")
     app.setQuitOnLastWindowClosed(False)
-    _enable_diagnostics()
+    _enable_diagnostics(config.load())
 
     i18n.set_language(config.load().data.get("language", "auto"))
 
