@@ -1,4 +1,4 @@
-name: Build Windows installer
+name: Build installers
 
 on:
   workflow_dispatch:        # botón "Run workflow" en la pestaña Actions
@@ -38,3 +38,31 @@ jobs:
         with:
           name: MeetTranscriptions-Setup
           path: packaging/Output/*.exe
+
+  # Paquete .deb para Debian/Ubuntu. Se construye en ubuntu-22.04 (glibc
+  # 2.35): el bundle de PyInstaller corre en esa versión o más nuevas.
+  build-deb:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update && sudo apt-get install -y libegl1
+          pip install ".[gui]" pyinstaller
+
+      - name: Build PyInstaller (onedir)
+        run: pyinstaller packaging/transcriptor.spec
+
+      - name: Armar paquete .deb
+        run: bash packaging/build_deb.sh
+
+      - name: Subir .deb como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeetTranscriptions-deb
+          path: dist/*.deb

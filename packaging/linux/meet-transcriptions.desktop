@@ -4,6 +4,6 @@ Name=Meet Transcriptions
 Comment=Automatic meeting transcription with minutes
 Comment[es]=Transcripción automática de reuniones con minuta
 Exec=meet-transcriptions
-Icon=audio-input-microphone
+Icon=meet-transcriptions
 Terminal=false
 Categories=AudioVideo;Audio;Transcription;

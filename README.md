@@ -16,7 +16,11 @@ Automatic transcription of meeting recordings (Google Meet, Zoom, phone calls…
 |---|---|
 | ![Wizard — API keys](docs/img/wizard-keys.png) | ![Tray badges](docs/img/tray-badges.png) |
 
-**Download (Windows):** get the latest `MeetTranscriptions-Setup-*.exe` from the [Releases page](https://github.com/daxcoletti/meet-transcriptions/releases).
+**Download:**
+
+- **Windows:** [MeetTranscriptions-Setup.exe](https://github.com/daxcoletti/meet-transcriptions/releases/latest/download/MeetTranscriptions-Setup.exe) (always the latest version)
+- **Debian/Ubuntu:** [meet-transcriptions_amd64.deb](https://github.com/daxcoletti/meet-transcriptions/releases/latest/download/meet-transcriptions_amd64.deb) — install with `sudo apt install ./meet-transcriptions_amd64.deb`
+- All versions on the [Releases page](https://github.com/daxcoletti/meet-transcriptions/releases).
 
 > ⚠️ The installer is not code-signed yet, so Windows SmartScreen will warn you: click **"More info" → "Run anyway"**. On Windows 11 with *Smart App Control* enabled there is no bypass — Smart App Control must be turned off to install unsigned apps.
 
@@ -28,7 +32,11 @@ Automatic transcription of meeting recordings (Google Meet, Zoom, phone calls…
 
 Transcriptor automático de grabaciones de reuniones (Google Meet, Zoom, etc.) que rota entre varias APIs gratuitas para esquivar los límites de cuota individuales, genera transcripción con diarización (identificación de hablantes) y una **minuta** en Markdown.
 
-**Descarga (Windows):** el instalador `MeetTranscriptions-Setup-*.exe` está en la [página de Releases](https://github.com/daxcoletti/meet-transcriptions/releases).
+**Descarga:**
+
+- **Windows:** [MeetTranscriptions-Setup.exe](https://github.com/daxcoletti/meet-transcriptions/releases/latest/download/MeetTranscriptions-Setup.exe) (siempre la última versión)
+- **Debian/Ubuntu:** [meet-transcriptions_amd64.deb](https://github.com/daxcoletti/meet-transcriptions/releases/latest/download/meet-transcriptions_amd64.deb) — se instala con `sudo apt install ./meet-transcriptions_amd64.deb`
+- Todas las versiones en la [página de Releases](https://github.com/daxcoletti/meet-transcriptions/releases).
 
 > ⚠️ El instalador todavía no está firmado digitalmente, así que SmartScreen va a avisar: clic en **"Más información" → "Ejecutar de todas formas"**. En Windows 11 con el *Control inteligente de aplicaciones* activado no hay bypass: hay que desactivarlo para instalar apps sin firma.
 
