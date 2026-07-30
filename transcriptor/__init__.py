@@ -1,4 +1,4 @@
 """Transcriptor automático de reuniones con rotación de APIs gratuitas."""
 
-__version__ = "2.5.0"
+__version__ = "2.5.1"
 APP_DISPLAY_NAME = "Meet Transcriptions"

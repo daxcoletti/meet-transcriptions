@@ -73,8 +73,8 @@ STRINGS = {
     "log.resumed": {"es": "▶️  Procesamiento reanudado.", "en": "▶️  Processing resumed."},
     "notify.done.title": {"es": "Transcripción lista", "en": "Transcription ready"},
     "notify.done.body": {
-        "es": "{name}: transcripción y minuta generadas.",
-        "en": "{name}: transcript and minutes generated.",
+        "es": "{name}: transcripción y minuta generadas. Clic acá para abrir la minuta.",
+        "en": "{name}: transcript and minutes generated. Click here to open the minutes.",
     },
     "notify.fail.title": {"es": "Transcripción fallida", "en": "Transcription failed"},
     "notify.fail.body": {
@@ -91,8 +91,8 @@ STRINGS = {
         "en": "Transcript ready (NO minutes)",
     },
     "notify.nominuta.body": {
-        "es": "{name}: la transcripción está, pero la minuta no se generó. Cargá una API key de Gemini o Groq en Configuración.",
-        "en": "{name}: the transcript is done, but the minutes were not generated. Add a Gemini or Groq API key in Settings.",
+        "es": "{name}: la transcripción está (clic acá para abrirla), pero la minuta no se generó — cargá una API key de Gemini o Groq en Configuración.",
+        "en": "{name}: the transcript is done (click here to open it), but the minutes were not generated — add a Gemini or Groq API key in Settings.",
     },
 
     # --- Grabación de pantalla ---
@@ -156,8 +156,8 @@ STRINGS = {
     "upd.menu_update": {"es": "⬆ Actualizar a la versión {version}", "en": "⬆ Update to version {version}"},
     "upd.available.title": {"es": "Actualización disponible", "en": "Update available"},
     "upd.available.body": {
-        "es": "Salió la versión {version} (tenés la {current}). Actualizá desde el menú del ícono de la bandeja.",
-        "en": "Version {version} is out (you have {current}). Update from the tray icon menu.",
+        "es": "Salió la versión {version} (tenés la {current}). Clic acá para actualizar, o desde el menú de la bandeja.",
+        "en": "Version {version} is out (you have {current}). Click here to update, or use the tray menu.",
     },
     "upd.none.title": {"es": "Sin novedades", "en": "No updates"},
     "upd.none.body": {

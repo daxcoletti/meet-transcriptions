@@ -11,7 +11,7 @@
 ; muestra antes de instalar).
 
 #define MyAppName "Meet Transcriptions"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.5.1"
 #define MyAppPublisher "TRANS-IT Foundation"
 #define MyAppExeName "MeetTranscriptions.exe"
 

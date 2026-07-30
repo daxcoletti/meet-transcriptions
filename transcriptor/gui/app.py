@@ -5,6 +5,7 @@ menú se abre el registro de actividad, la configuración y las carpetas de
 resultados.
 """
 
+import os
 import subprocess
 import sys
 import threading
@@ -189,7 +190,32 @@ class TrayApp:
         self._update_tray_status()
         self._build_menu()
         self.tray.activated.connect(self._on_tray_activated)
+        # Notificaciones accionables: clic en el globo → acción asociada
+        self._notify_action = None
+        self.tray.messageClicked.connect(self._on_message_clicked)
         self.tray.show()
+
+    def _notify(self, title, body, icon, msecs, action=None):
+        """showMessage + acción opcional para el clic en el globo."""
+        self._notify_action = action
+        self.tray.showMessage(title, body, icon, msecs)
+
+    def _on_message_clicked(self):
+        action, self._notify_action = self._notify_action, None
+        if action:
+            try:
+                action()
+            except Exception as e:
+                engine.log(f"⚠️  acción de notificación falló: {e}")
+
+    def _open_in_folder(self, file_path):
+        """Abre el explorador con el archivo seleccionado (o su carpeta)."""
+        file_path = Path(file_path)
+        if os.name == "nt" and file_path.exists():
+            # explorer /select resalta el archivo exacto
+            subprocess.Popen(["explorer", f"/select,{file_path}"])
+            return
+        self._open_dir(file_path.parent if file_path.suffix else file_path)
 
     # --- Atajo global ---
     def _setup_hotkey(self):
@@ -287,9 +313,10 @@ class TrayApp:
         self._update_tray_status_or_busy()
         if result["error"]:
             engine.log(tr("rec.failed", err=result["error"]))
-            self.tray.showMessage(
+            self._notify(
                 "Meet Transcriptions", tr("rec.failed", err=result["error"]),
                 QSystemTrayIcon.Warning, 10000,
+                action=self._show_log,
             )
         else:
             name = Path(result["path"]).name
@@ -504,11 +531,12 @@ class TrayApp:
             return
         self.update_info = info
         self._build_menu()  # el ítem pasa a "Actualizar a la versión X"
-        self.tray.showMessage(
+        self._notify(
             tr("upd.available.title"),
             tr("upd.available.body", version=info["version"], current=__version__),
             QSystemTrayIcon.Information,
             15000,
+            action=self._start_update,
         )
 
     def _confirm_update(self, info):
@@ -564,33 +592,42 @@ class TrayApp:
         self._busy = None
         self._spin_timer.stop()
         self._update_tray_status()
+        stem = Path(name).stem
         if status == "ok":
-            self.tray.showMessage(
+            self._notify(
                 tr("notify.done.title"),
                 tr("notify.done.body", name=name),
                 QSystemTrayIcon.Information,
-                8000,
+                10000,
+                action=lambda: self._open_in_folder(
+                    self.cfg.minutas_dir / f"{stem}.md"
+                ),
             )
         elif status == "no_audio":
-            self.tray.showMessage(
+            self._notify(
                 tr("notify.noaudio.title"),
                 tr("notify.noaudio.body", name=name),
                 QSystemTrayIcon.Warning,
                 10000,
+                action=lambda: self._open_dir(self.cfg.processed_dir),
             )
         elif status == "ok_no_minuta":
-            self.tray.showMessage(
+            self._notify(
                 tr("notify.nominuta.title"),
                 tr("notify.nominuta.body", name=name),
                 QSystemTrayIcon.Warning,
                 15000,
+                action=lambda: self._open_in_folder(
+                    self.cfg.transcriptions_dir / f"{stem}.txt"
+                ),
             )
         else:
-            self.tray.showMessage(
+            self._notify(
                 tr("notify.fail.title"),
                 tr("notify.fail.body", name=name),
                 QSystemTrayIcon.Warning,
                 8000,
+                action=self._show_log,
             )
 
 
