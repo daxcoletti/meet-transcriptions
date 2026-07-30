@@ -48,7 +48,8 @@ def main():
         offset += len(data)
 
     out.write_bytes(header + entries + blobs)
-    print(f"OK → {out}")
+    # Solo ASCII: la consola de Windows suele ser cp1252 y no banca "→".
+    print(f"OK -> {out}")
 
 
 if __name__ == "__main__":

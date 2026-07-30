@@ -5,6 +5,9 @@ on:
   push:
     tags: ["v*"]            # o taggear un release: git tag v2.0.0 && git push --tags
 
+env:
+  PYTHONUTF8: "1"   # la consola de Windows es cp1252; evita UnicodeEncodeError
+
 jobs:
   build:
     runs-on: windows-latest
