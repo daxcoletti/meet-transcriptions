@@ -1,9 +1,9 @@
 """Grabación de pantalla integrada (fase 1a+1b: Windows y Linux/X11).
 
 Diseño:
-- Baja resolución y FPS bajísimos a propósito: el objetivo es identificar
-  presentaciones y pantallas compartidas, no producir video lindo. Eso da
-  archivos chicos y CPU despreciable.
+- Resolución y FPS moderados: suficiente fluidez para volver a ver la
+  reunión sin que se entrecorte, manteniendo archivos chicos y poca CPU
+  (el contenido es casi estático y x264 comprime muy bien frames repetidos).
 - Contenedor MKV: si la app muere a mitad de una grabación larga, el archivo
   queda reproducible hasta el corte (un MP4 sin finalizar es basura).
 - Se graba en un staging (<carpeta vigilada>/.grabando/) y se mueve a la
@@ -34,9 +34,14 @@ from pathlib import Path
 from . import ffmpeg_utils
 
 # calidad → (alto de video, fps)
+# 10 fps es el piso para que la reproducción no se sienta entrecortada;
+# menos de eso servía para identificar pantallas pero no para volver a ver
+# la reunión. El costo en disco/CPU sigue siendo bajo: el contenido es casi
+# estático y x264 con -tune stillimage comprime muy bien los frames repetidos.
 QUALITY = {
-    "low": (480, 2),
-    "medium": (720, 5),
+    "low": (480, 10),
+    "medium": (720, 15),
+    "high": (1080, 30),
 }
 
 STAGING_DIRNAME = ".grabando"
@@ -270,7 +275,7 @@ class ScreenRecorder:
         if not ffmpeg:
             raise RecordingError("ffmpeg no está disponible")
 
-        height, fps = QUALITY.get(self.cfg.data.get("record_quality", "low"), QUALITY["low"])
+        height, fps = QUALITY.get(self.cfg.data.get("record_quality", "medium"), QUALITY["medium"])
         want_mic = bool(self.cfg.data.get("record_mic", True))
         want_system = bool(self.cfg.data.get("record_system", True))
 

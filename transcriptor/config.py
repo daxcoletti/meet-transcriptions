@@ -51,7 +51,7 @@ _DEFAULTS = {
     "ffmpeg_path": "",  # vacío = autodetectar (PATH o descarga propia)
     "language": "auto",  # idioma de la interfaz: "auto" | "es" | "en"
     # Grabación de pantalla integrada
-    "record_quality": "low",  # "low" (480p/2fps) | "medium" (720p/5fps)
+    "record_quality": "medium",  # "low" (480p/10fps) | "medium" (720p/15fps) | "high" (1080p/30fps)
     "record_mic": True,       # grabar micrófono
     "record_system": True,    # grabar audio del sistema (lo que se escucha)
     "record_hotkey": "Ctrl+Alt+R",  # atajo global grabar/detener ("" = desactivado)

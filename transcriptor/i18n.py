@@ -143,8 +143,9 @@ STRINGS = {
     },
     "set.rec_group": {"es": "Grabación de pantalla", "en": "Screen recording"},
     "set.rec_quality": {"es": "Calidad:", "en": "Quality:"},
-    "set.rec_q_low": {"es": "Baja (480p, 2 fps) — recomendada", "en": "Low (480p, 2 fps) — recommended"},
-    "set.rec_q_medium": {"es": "Media (720p, 5 fps)", "en": "Medium (720p, 5 fps)"},
+    "set.rec_q_low": {"es": "Baja (480p, 10 fps)", "en": "Low (480p, 10 fps)"},
+    "set.rec_q_medium": {"es": "Media (720p, 15 fps) — recomendada", "en": "Medium (720p, 15 fps) — recommended"},
+    "set.rec_q_high": {"es": "Alta (1080p, 30 fps)", "en": "High (1080p, 30 fps)"},
     "set.rec_mic": {"es": "Grabar micrófono", "en": "Record microphone"},
     "set.rec_system": {
         "es": "Grabar audio del sistema (lo que se escucha, p.ej. la reunión)",

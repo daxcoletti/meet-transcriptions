@@ -179,8 +179,10 @@ class SettingsDialog(QDialog):
         self.rec_quality = QComboBox()
         self.rec_quality.addItem(tr("set.rec_q_low"), "low")
         self.rec_quality.addItem(tr("set.rec_q_medium"), "medium")
-        current_q = cfg.data.get("record_quality", "low")
-        self.rec_quality.setCurrentIndex(0 if current_q == "low" else 1)
+        self.rec_quality.addItem(tr("set.rec_q_high"), "high")
+        current_q = cfg.data.get("record_quality", "medium")
+        idx = self.rec_quality.findData(current_q)
+        self.rec_quality.setCurrentIndex(idx if idx >= 0 else 1)
         form.addRow(tr("set.rec_quality"), self.rec_quality)
 
         self.rec_mic = QCheckBox(tr("set.rec_mic"))
