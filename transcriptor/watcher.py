@@ -42,7 +42,7 @@ class AudioWatcher:
     Callbacks (se invocan desde el hilo worker — la GUI debe puentearlos
     con señales Qt):
       on_file_done(nombre, status): terminó de procesar un archivo;
-      status es "ok", "ok_no_minuta" o "fail".
+      status es "ok", "no_audio" o "fail".
     """
 
     def __init__(self, cfg, on_file_done=None):

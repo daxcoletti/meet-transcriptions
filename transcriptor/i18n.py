@@ -19,7 +19,6 @@ STRINGS = {
     "tray.activity": {"es": "Ver actividad", "en": "View activity"},
     "tray.open_recordings": {"es": "Abrir carpeta de grabaciones", "en": "Open recordings folder"},
     "tray.open_transcriptions": {"es": "Abrir transcripciones", "en": "Open transcriptions"},
-    "tray.open_minutas": {"es": "Abrir minutas", "en": "Open minutes"},
     "tray.pause": {"es": "Pausar procesamiento", "en": "Pause processing"},
     "tray.resume": {"es": "Reanudar procesamiento", "en": "Resume processing"},
     "tray.settings": {"es": "Configuración…", "en": "Settings…"},
@@ -27,16 +26,8 @@ STRINGS = {
     "tray.open_logs": {"es": "Abrir registros (debug)", "en": "Open logs (debug)"},
     "log.title": {"es": "Meet Transcriptions — Actividad", "en": "Meet Transcriptions — Activity"},
     "tray.tip_ok": {
-        "es": "Meet Transcriptions — ✔ listo: transcripción y minuta configuradas",
-        "en": "Meet Transcriptions — ✔ ready: transcription and minutes configured",
-    },
-    "tray.tip_no_minuta": {
-        "es": "Meet Transcriptions — ⚠ transcribe, pero SIN minuta: falta key de Gemini o Groq (Configuración)",
-        "en": "Meet Transcriptions — ⚠ transcribes, but NO minutes: missing Gemini or Groq key (Settings)",
-    },
-    "tray.tip_no_trans": {
-        "es": "Meet Transcriptions — ⚠ falta una key de transcripción (Configuración)",
-        "en": "Meet Transcriptions — ⚠ missing a transcription key (Settings)",
+        "es": "Meet Transcriptions — ✔ listo: transcripción configurada",
+        "en": "Meet Transcriptions — ✔ ready: transcription configured",
     },
     "tray.tip_busy": {
         "es": "Meet Transcriptions — ⚙ procesando {file}: {stage}",
@@ -50,7 +41,6 @@ STRINGS = {
         "en": "transcribing (no diarization)",
     },
     "stage.guardando transcripción": {"es": "guardando la transcripción", "en": "saving transcript"},
-    "stage.generando minuta": {"es": "generando la minuta", "en": "writing the minutes"},
     "stage.error": {"es": "error", "en": "error"},
     "tray.tip_no_keys": {
         "es": "Meet Transcriptions — ✘ sin API keys: no puede procesar nada (abrí Configuración)",
@@ -73,8 +63,8 @@ STRINGS = {
     "log.resumed": {"es": "▶️  Procesamiento reanudado.", "en": "▶️  Processing resumed."},
     "notify.done.title": {"es": "Transcripción lista", "en": "Transcription ready"},
     "notify.done.body": {
-        "es": "{name}: transcripción y minuta generadas. Clic acá para abrir la minuta.",
-        "en": "{name}: transcript and minutes generated. Click here to open the minutes.",
+        "es": "{name}: transcripción generada. Clic acá para abrirla.",
+        "en": "{name}: transcript generated. Click here to open it.",
     },
     "notify.fail.title": {"es": "Transcripción fallida", "en": "Transcription failed"},
     "notify.fail.body": {
@@ -85,14 +75,6 @@ STRINGS = {
     "notify.noaudio.body": {
         "es": "{name}: no tiene audio, no hay nada para transcribir. Se archivó en procesados/.",
         "en": "{name}: has no audio, nothing to transcribe. Archived in procesados/.",
-    },
-    "notify.nominuta.title": {
-        "es": "Transcripción lista (SIN minuta)",
-        "en": "Transcript ready (NO minutes)",
-    },
-    "notify.nominuta.body": {
-        "es": "{name}: la transcripción está (clic acá para abrirla), pero la minuta no se generó — cargá una API key de Gemini o Groq en Configuración.",
-        "en": "{name}: the transcript is done (click here to open it), but the minutes were not generated — add a Gemini or Groq API key in Settings.",
     },
 
     # --- Grabación de pantalla ---
@@ -143,9 +125,12 @@ STRINGS = {
     },
     "set.rec_group": {"es": "Grabación de pantalla", "en": "Screen recording"},
     "set.rec_quality": {"es": "Calidad:", "en": "Quality:"},
-    "set.rec_q_low": {"es": "Baja (480p, 10 fps)", "en": "Low (480p, 10 fps)"},
-    "set.rec_q_medium": {"es": "Media (720p, 15 fps) — recomendada", "en": "Medium (720p, 15 fps) — recommended"},
-    "set.rec_q_high": {"es": "Alta (1080p, 30 fps)", "en": "High (1080p, 30 fps)"},
+    "set.rec_q_low": {
+        "es": "Liviana (720p, 5 fps) — mínimo consumo, ideal para analizar con IA",
+        "en": "Light (720p, 5 fps) — lowest load, ideal for AI analysis",
+    },
+    "set.rec_q_medium": {"es": "Media (720p, 10 fps) — recomendada", "en": "Medium (720p, 10 fps) — recommended"},
+    "set.rec_q_high": {"es": "Alta (1080p, 15 fps)", "en": "High (1080p, 15 fps)"},
     "set.rec_mic": {"es": "Grabar micrófono", "en": "Record microphone"},
     "set.rec_system": {
         "es": "Grabar audio del sistema (lo que se escucha, p.ej. la reunión)",
@@ -205,21 +190,12 @@ STRINGS = {
         "es": "🎙 Transcripción — se necesita AL MENOS UNA",
         "en": "🎙 Transcription — AT LEAST ONE required",
     },
-    "keys.section_minuta": {
-        "es": "📝 Minuta — se necesita Gemini (recomendado) o Groq",
-        "en": "📝 Minutes — Gemini (recommended) or Groq required",
-    },
-    "keys.minuta_warn": {
-        "es": "⚠️ Sin una key de <b>Gemini</b> o <b>Groq</b> NO se genera la minuta (resumen, decisiones y tareas) — solo la transcripción.",
-        "en": "⚠️ Without a <b>Gemini</b> or <b>Groq</b> key, the minutes (summary, decisions, action items) are NOT generated — only the transcript.",
-    },
     "prov.deepgram": {"es": "Transcripción + diarización (preferido)", "en": "Transcription + diarization (preferred)"},
     "prov.gladia": {"es": "Transcripción + diarización", "en": "Transcription + diarization"},
     "prov.assemblyai": {"es": "Transcripción + diarización", "en": "Transcription + diarization"},
     "prov.elevenlabs": {"es": "Transcripción + diarización (Scribe)", "en": "Transcription + diarization (Scribe)"},
     "prov.speechmatics": {"es": "Transcripción + diarización", "en": "Transcription + diarization"},
-    "prov.groq": {"es": "Transcripción Whisper — también sirve como minuta de respaldo", "en": "Whisper transcription — also works as fallback for minutes"},
-    "prov.gemini": {"es": "Minuta (contexto de 1M tokens) — conseguila gratis en AI Studio", "en": "Minutes (1M-token context) — get it free at AI Studio"},
+    "prov.groq": {"es": "Transcripción Whisper (sin diarización)", "en": "Whisper transcription (no diarization)"},
     "keys.placeholder": {"es": "(sin configurar)", "en": "(not set)"},
     "keys.toggle_tip": {"es": "Mostrar/ocultar la key", "en": "Show/hide the key"},
     "keys.test": {"es": "Probar", "en": "Test"},
@@ -260,10 +236,9 @@ STRINGS = {
     "wiz.intro.text": {
         "es": (
             "Esta aplicación vigila una carpeta de grabaciones (Google Meet, "
-            "Zoom, llamadas…) y, por cada audio nuevo, genera automáticamente:"
-            "<ul><li>la <b>transcripción</b> con identificación de hablantes "
-            "(VTT, TXT y JSON), y</li><li>una <b>minuta</b> en Markdown con "
-            "resumen, decisiones y tareas.</li></ul>"
+            "Zoom, llamadas…) y, por cada audio nuevo, genera automáticamente "
+            "la <b>transcripción</b> con identificación de hablantes "
+            "(VTT, TXT y JSON).<br><br>"
             "Usa los planes <b>gratuitos</b> de varios servicios de "
             "transcripción, rotando entre ellos para esquivar los límites de "
             "cuota. En los próximos pasos vamos a verificar <b>ffmpeg</b>, "
@@ -271,10 +246,9 @@ STRINGS = {
         ),
         "en": (
             "This application watches a recordings folder (Google Meet, Zoom, "
-            "calls…) and, for every new audio file, automatically generates:"
-            "<ul><li>the <b>transcript</b> with speaker identification "
-            "(VTT, TXT and JSON), and</li><li><b>meeting minutes</b> in "
-            "Markdown with summary, decisions and action items.</li></ul>"
+            "calls…) and, for every new audio file, automatically generates "
+            "the <b>transcript</b> with speaker identification "
+            "(VTT, TXT and JSON).<br><br>"
             "It uses the <b>free</b> tiers of several transcription services, "
             "rotating among them to dodge individual quota limits. In the next "
             "steps we will verify <b>ffmpeg</b>, load your <b>API keys</b> and "
@@ -312,14 +286,14 @@ STRINGS = {
         "es": (
             "Esta es LA carpeta donde vas a arrastrar tus grabaciones: todo "
             "audio o video que aparezca acá se transcribe automáticamente. Los "
-            "resultados quedan en subcarpetas (transcriptions/, Minutas/) y el "
+            "resultados quedan en la subcarpeta transcriptions/ y el "
             "original se mueve a procesados/."
         ),
         "en": (
             "This is THE folder where you will drag & drop your recordings: any "
             "audio or video file that appears here gets transcribed "
-            "automatically. Results go to subfolders (transcriptions/, "
-            "Minutas/) and the original is moved to procesados/."
+            "automatically. Results go to the transcriptions/ subfolder "
+            "and the original is moved to procesados/."
         ),
     },
     "wiz.folder.browse": {"es": "Examinar…", "en": "Browse…"},
@@ -362,14 +336,14 @@ STRINGS = {
             "Al finalizar, la aplicación queda en la <b>bandeja del sistema</b> "
             "(junto al reloj). Arrastrá tus grabaciones a la carpeta vigilada "
             "— o a su acceso directo — y en unos minutos vas a tener la "
-            "transcripción y la minuta. Todo esto se puede cambiar después "
+            "transcripción. Todo esto se puede cambiar después "
             "desde el menú «Configuración»."
         ),
         "en": (
             "When you finish, the application stays in the <b>system tray</b> "
             "(next to the clock). Drag your recordings into the watched folder "
             "— or its shortcut — and within minutes you will have the "
-            "transcript and the minutes. Everything can be changed later from "
+            "transcript. Everything can be changed later from "
             "the “Settings” menu."
         ),
     },
@@ -382,9 +356,9 @@ STRINGS = {
     "set.sec_ffmpeg": {"es": "🛠  ffmpeg", "en": "🛠  ffmpeg"},
     "set.keys_hint": {
         "es": "Los nombres de los servicios son enlaces para registrarse gratis. "
-              "Transcripción: al menos una key. Minuta: Gemini o Groq.",
+              "Hace falta al menos una key.",
         "en": "Service names are links to sign up for free. "
-              "Transcription: at least one key. Minutes: Gemini or Groq.",
+              "At least one key is required.",
     },
     "set.keys_group": {
         "es": "API keys (los nombres son enlaces para registrarse)",

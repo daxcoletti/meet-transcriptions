@@ -4,15 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meet-transcriptions"
-version = "2.5.3"
-description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización + minuta)"
+version = "2.5.4"
+description = "Transcriptor automático de reuniones con rotación de APIs gratuitas (transcripción + diarización)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "TRANS-IT Foundation" }]
 dependencies = [
     "requests",
-    "langdetect",
     "filelock",
     "platformdirs",
     "watchdog",

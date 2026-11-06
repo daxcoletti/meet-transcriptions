@@ -48,9 +48,9 @@ Recommends: ffmpeg
 Section: sound
 Priority: optional
 Homepage: https://github.com/daxcoletti/meet-transcriptions
-Description: Automatic meeting transcription with AI minutes
+Description: Automatic meeting transcription with speaker diarization
  Watches a recordings folder and generates speaker-diarized transcripts
- (VTT, TXT, JSON) plus AI-written meeting minutes in Markdown, rotating
+ (VTT, TXT, JSON) and records the screen, rotating
  across the free tiers of several transcription APIs. Lives in the
  system tray; includes a first-run setup wizard. Bilingual (en/es).
 EOF

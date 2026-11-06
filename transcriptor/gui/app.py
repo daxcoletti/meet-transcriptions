@@ -70,8 +70,8 @@ def _make_icon(badge=None, spin=0):
     """Ícono de micrófono dibujado programáticamente (sin assets binarios).
 
     badge: None | "ok" | "warn" | "error" | "busy" — distintivo de color en
-    la esquina: estado de las API keys (verde = completo, amarillo = falta
-    transcripción o minuta, rojo = sin keys) o actividad ("busy": spinner
+    la esquina: estado de las API keys (verde = hay key de transcripción,
+    rojo = sin keys) o actividad ("busy": spinner
     azul; `spin` 0-3 rota el arco para animarlo).
     """
     pm = QPixmap(64, 64)
@@ -125,7 +125,7 @@ class _Bridge(QObject):
     """Puentea callbacks de hilos worker hacia el hilo de la GUI."""
 
     log_line = Signal(str)
-    file_done = Signal(str, str)  # nombre, status ("ok"|"ok_no_minuta"|"fail")
+    file_done = Signal(str, str)  # nombre, status ("ok"|"no_audio"|"fail")
     progress = Signal(object)     # dict de progreso del engine (archivo, etapa, ...)
     record_done = Signal(object)  # {"path": str|None, "error": str|None}
     hotkey_pressed = Signal()     # atajo global grabar/detener (desde el hilo de pynput)
@@ -358,14 +358,8 @@ class TrayApp:
         """Ícono con distintivo de color + tooltip según las keys configuradas."""
         if self._busy or self._recording_active():
             return  # procesando o grabando: ese estado manda
-        has_t = self.cfg.has_transcription_key()
-        has_m = self.cfg.has_minuta_key()
-        if has_t and has_m:
+        if self.cfg.has_transcription_key():
             badge, tip = "ok", tr("tray.tip_ok")
-        elif has_t:
-            badge, tip = "warn", tr("tray.tip_no_minuta")
-        elif has_m:
-            badge, tip = "warn", tr("tray.tip_no_trans")
         else:
             badge, tip = "error", tr("tray.tip_no_keys")
         self.tray.setIcon(_make_icon(badge))
@@ -390,8 +384,6 @@ class TrayApp:
                        lambda: self._open_dir(self.cfg.audios_dir))
         menu.addAction(tr("tray.open_transcriptions"),
                        lambda: self._open_dir(self.cfg.transcriptions_dir))
-        menu.addAction(tr("tray.open_minutas"),
-                       lambda: self._open_dir(self.cfg.minutas_dir))
         menu.addSeparator()
         self.pause_action = QAction(tr("tray.pause"))
         self.pause_action.setCheckable(True)
@@ -600,7 +592,7 @@ class TrayApp:
                 QSystemTrayIcon.Information,
                 10000,
                 action=lambda: self._open_in_folder(
-                    self.cfg.minutas_dir / f"{stem}.md"
+                    self.cfg.transcriptions_dir / f"{stem}.txt"
                 ),
             )
         elif status == "no_audio":
@@ -610,16 +602,6 @@ class TrayApp:
                 QSystemTrayIcon.Warning,
                 10000,
                 action=lambda: self._open_dir(self.cfg.processed_dir),
-            )
-        elif status == "ok_no_minuta":
-            self._notify(
-                tr("notify.nominuta.title"),
-                tr("notify.nominuta.body", name=name),
-                QSystemTrayIcon.Warning,
-                15000,
-                action=lambda: self._open_in_folder(
-                    self.cfg.transcriptions_dir / f"{stem}.txt"
-                ),
             )
         else:
             self._notify(

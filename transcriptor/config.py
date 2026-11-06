@@ -38,9 +38,7 @@ TRANSCRIPTION_PROVIDERS = [
 DIARIZATION_PROVIDERS = [
     "deepgram", "gladia", "assemblyai", "elevenlabs", "speechmatics",
 ]
-# Cualquiera de estas dos keys habilita la generación de la minuta.
-MINUTA_PROVIDERS = ["gemini", "groq"]
-ALL_PROVIDERS = TRANSCRIPTION_PROVIDERS + ["gemini"]
+ALL_PROVIDERS = TRANSCRIPTION_PROVIDERS
 
 VALID_EXTENSIONS = [".mp3", ".wav", ".m4a", ".mkv", ".mp4", ".ogg"]
 
@@ -51,7 +49,7 @@ _DEFAULTS = {
     "ffmpeg_path": "",  # vacío = autodetectar (PATH o descarga propia)
     "language": "auto",  # idioma de la interfaz: "auto" | "es" | "en"
     # Grabación de pantalla integrada
-    "record_quality": "medium",  # "low" (480p/10fps) | "medium" (720p/15fps) | "high" (1080p/30fps)
+    "record_quality": "medium",  # "low" (720p/5fps) | "medium" (720p/10fps) | "high" (1080p/15fps)
     "record_mic": True,       # grabar micrófono
     "record_system": True,    # grabar audio del sistema (lo que se escucha)
     "record_hotkey": "Ctrl+Alt+R",  # atajo global grabar/detener ("" = desactivado)
@@ -85,10 +83,6 @@ class Config:
         return self.audios_dir / "procesados"
 
     @property
-    def minutas_dir(self):
-        return self.audios_dir / "Minutas"
-
-    @property
     def progress_dir(self):
         return self.audios_dir / "progress"
 
@@ -115,12 +109,9 @@ class Config:
     def has_transcription_key(self):
         return any(self.get_key(p) for p in TRANSCRIPTION_PROVIDERS)
 
-    def has_minuta_key(self):
-        return any(self.get_key(p) for p in MINUTA_PROVIDERS)
-
     def ensure_dirs(self):
         for d in [self.audios_dir, self.transcriptions_dir,
-                  self.processed_dir, self.minutas_dir]:
+                  self.processed_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
     def save(self):

@@ -30,7 +30,7 @@ VSVersionInfo(
     StringFileInfo([
       StringTable('040904B0', [
         StringStruct('CompanyName', 'TRANS-IT Foundation'),
-        StringStruct('FileDescription', 'Meet Transcriptions — automatic meeting transcription and minutes'),
+        StringStruct('FileDescription', 'Meet Transcriptions — automatic meeting transcription'),
         StringStruct('FileVersion', '{version}'),
         StringStruct('InternalName', 'MeetTranscriptions'),
         StringStruct('LegalCopyright', 'TRANS-IT Foundation. Licensed under GPL-3.0-or-later.'),

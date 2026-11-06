@@ -5,13 +5,10 @@
 
 import os
 
-from PyInstaller.utils.hooks import collect_data_files
-
 # SPECPATH = directorio que contiene este .spec (lo define PyInstaller)
 ROOT = os.path.dirname(SPECPATH)
 
-# langdetect necesita sus perfiles de idioma (archivos de datos del paquete).
-datas = collect_data_files("langdetect")
+datas = []
 
 icon_path = os.path.join(SPECPATH, "windows", "icon.ico")
 icon = icon_path if os.path.exists(icon_path) else None

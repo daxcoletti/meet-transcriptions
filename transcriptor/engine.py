@@ -1,4 +1,4 @@
-"""Motor de transcripción: segmentación, proveedores, diarización y minuta.
+"""Motor de transcripción: segmentación, proveedores y diarización.
 
 Es el corazón del viejo `super_transcriptor_v2.py`, ahora multiplataforma:
 - sin rutas hardcodeadas: todo sale de un `Config` (ver `configure()`);
@@ -22,13 +22,6 @@ import requests
 
 from . import config as config_mod
 from . import ffmpeg_utils
-
-# Detección de idioma para las minutas
-try:
-    from langdetect import detect
-    HAS_LANGDETECT = True
-except ImportError:
-    HAS_LANGDETECT = False
 
 # tqdm solo tiene sentido en una terminal interactiva (modo CLI)
 try:
@@ -127,7 +120,6 @@ CFG = None
 AUDIOS_DIR = None
 TRANSCRIPTIONS_DIR = None
 PROCESSED_DIR = None
-MINUTAS_DIR = None
 PROGRESS_DIR = None
 LOG_FILE = None
 
@@ -137,7 +129,6 @@ DEEPGRAM_API_KEY = None
 ASSEMBLYAI_API_KEY = None
 ELEVENLABS_API_KEY = None
 SPEECHMATICS_API_KEY = None
-GEMINI_API_KEY = None
 
 # Speechmatics no hace code-switching: transcribe con un idioma fijo por job.
 SPEECHMATICS_LANG = "en"
@@ -147,17 +138,16 @@ FFMPEG = None  # ruta al binario, resuelta en configure()
 
 def configure(cfg):
     """Inyecta la configuración (rutas + keys) y resuelve ffmpeg."""
-    global CFG, AUDIOS_DIR, TRANSCRIPTIONS_DIR, PROCESSED_DIR, MINUTAS_DIR
+    global CFG, AUDIOS_DIR, TRANSCRIPTIONS_DIR, PROCESSED_DIR
     global PROGRESS_DIR, LOG_FILE
     global GROQ_API_KEY, GLADIA_API_KEY, DEEPGRAM_API_KEY, ASSEMBLYAI_API_KEY
-    global ELEVENLABS_API_KEY, SPEECHMATICS_API_KEY, GEMINI_API_KEY
+    global ELEVENLABS_API_KEY, SPEECHMATICS_API_KEY
     global SPEECHMATICS_LANG, FFMPEG
 
     CFG = cfg
     AUDIOS_DIR = cfg.audios_dir
     TRANSCRIPTIONS_DIR = cfg.transcriptions_dir
     PROCESSED_DIR = cfg.processed_dir
-    MINUTAS_DIR = cfg.minutas_dir
     PROGRESS_DIR = cfg.progress_dir
     LOG_FILE = cfg.log_file
 
@@ -167,7 +157,6 @@ def configure(cfg):
     ASSEMBLYAI_API_KEY = cfg.get_key("assemblyai")
     ELEVENLABS_API_KEY = cfg.get_key("elevenlabs")
     SPEECHMATICS_API_KEY = cfg.get_key("speechmatics")
-    GEMINI_API_KEY = cfg.get_key("gemini")
 
     SPEECHMATICS_LANG = cfg.speechmatics_lang
     FFMPEG = ffmpeg_utils.find_ffmpeg(cfg)
@@ -712,304 +701,11 @@ def build_fallback_outputs(segment_texts, segment_duration=600):
     return "\n".join(vtt_lines), "\n".join(txt_lines), json_content
 
 
-# --- Generación de minuta con estrategia map-reduce ---------------------------
-# Cada modelo de Groq tiene su propio cupo TPM (tokens por minuto) en el free
-# tier. Rotamos entre varios en el paso "map" para repartir la carga y esquivar
-# los 429/413 que aparecían al mandar todo el transcript en una sola llamada.
-GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-# Modelos usados para condensar cada trozo (paso map). Se rotan round-robin
-# para repartir el TPM. Solo modelos que aguantan un trozo de ~10k chars sin
-# 413 en free tier (gpt-oss-20b quedó fuera: TPM demasiado bajo).
-MAP_MODELS = [
-    "openai/gpt-oss-120b",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "qwen/qwen3-32b",
-    "llama-3.3-70b-versatile",
-]
-# Modelo fuerte para armar la minuta final (paso reduce).
-REDUCE_MODEL = "llama-3.3-70b-versatile"
-
-# Presupuesto de caracteres por trozo. En español ~2.6 chars/token, así que
-# 10k chars ≈ 3.8k tokens: entra incluso en los modelos de TPM más bajo del
-# free tier (p.ej. qwen3-32b, con 6000 TPM) sumando prompt y salida.
-MAP_CHUNK_CHARS = 10000
-
-
-def _detect_lang(text):
-    """Detecta el idioma del texto de forma programática (default 'en')."""
-    if HAS_LANGDETECT and text:
-        try:
-            return detect(text[:2000])
-        except Exception:
-            pass
-    return "en"
-
-
-def _parse_retry_after(res):
-    """Segundos a esperar ante un 429, según el header o el cuerpo de Groq."""
-    ra = res.headers.get("retry-after")
-    if ra:
-        try:
-            return float(ra) + 0.5
-        except ValueError:
-            pass
-    m = re.search(r"try again in ([0-9.]+)s", res.text)
-    if m:
-        return float(m.group(1)) + 0.5
-    return 8.0
-
-
-def _groq_chat(messages, model, max_tokens=1200, temperature=0.3, max_retries=4):
-    """Llama al chat de Groq con reintentos/backoff ante 429.
-
-    Devuelve el texto de la respuesta, o None si falla tras los reintentos
-    (o ante un error no recuperable como 413).
-    """
-    if not GROQ_API_KEY:
-        return None
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-    for attempt in range(max_retries):
-        try:
-            res = requests.post(GROQ_CHAT_URL, headers=headers, json=payload, timeout=180)
-        except Exception as e:
-            log(f"{RED}❌ Groq LLM excepción ({model}): {e}{RESET}")
-            time.sleep(2 * (attempt + 1))
-            continue
-        if res.status_code == 200:
-            return res.json()["choices"][0]["message"]["content"]
-        if res.status_code == 429:
-            wait = _parse_retry_after(res)
-            log(f"{YELLOW}⏳ 429 en {model}, reintento en {wait:.1f}s{RESET}")
-            time.sleep(wait)
-            continue
-        # 413 u otros: reintentar el mismo request no ayuda.
-        log(f"{RED}❌ Groq LLM error {res.status_code} ({model}): {res.text[:200]}{RESET}")
-        return None
-    return None
-
-
-def _chunk_text(text, size):
-    """Parte el texto en trozos <= size, cortando por salto de línea/espacio."""
-    chunks = []
-    remaining = text
-    while len(remaining) > size:
-        cut = remaining.rfind("\n", 0, size)
-        if cut < size * 0.5:  # sin salto útil: cortar por espacio
-            cut = remaining.rfind(" ", 0, size)
-        if cut <= 0:
-            cut = size
-        chunks.append(remaining[:cut])
-        remaining = remaining[cut:]
-    if remaining.strip():
-        chunks.append(remaining)
-    return chunks
-
-
-def _map_condense(text, lang):
-    """MAP: condensa cada trozo del texto, rotando modelos para repartir el TPM."""
-    chunks = _chunk_text(text, MAP_CHUNK_CHARS)
-    out = []
-    for i, chunk in enumerate(chunks):
-        model = MAP_MODELS[i % len(MAP_MODELS)]
-        sys_msg = (
-            "You condense meeting-transcript fragments. Produce a dense but "
-            "faithful summary preserving decisions, action items, names, numbers "
-            "and key points. Do not invent content."
-        )
-        usr_msg = (
-            f"Fragment {i + 1} of {len(chunks)} of a meeting transcript "
-            f"(language '{lang}'). Summarize it in that SAME language, keeping "
-            f"every decision, task, owner, date and figure:\n\n{chunk}"
-        )
-        summary = _groq_chat(
-            [{"role": "system", "content": sys_msg},
-             {"role": "user", "content": usr_msg}],
-            model=model, max_tokens=1200,
-        )
-        if summary:
-            out.append(f"[Parte {i + 1}]\n{summary}")
-            log(f"   ✅ trozo {i + 1}/{len(chunks)} condensado ({model})")
-        else:
-            # Si falla el resumen, incluir el crudo recortado para no perder info.
-            out.append(f"[Parte {i + 1} — sin resumir]\n{chunk[:4000]}")
-            log(f"{YELLOW}   ⚠️  trozo {i + 1}/{len(chunks)} sin resumir ({model}){RESET}")
-        time.sleep(1)  # pequeño respiro para el TPM
-    return "\n\n".join(out)
-
-
-def _minuta_prompt(content, filename, lang, from_summaries=False):
-    """Construye (system_msg, user_msg) para la minuta. Reusado por Groq y Gemini."""
-    system_msg = (
-        "You are an expert assistant at writing clear, concise, and professional "
-        "summaries of recorded audio, which may be a one-on-one conversation, a "
-        "phone call, an interview, or a formal meeting. Extract only relevant "
-        "information: summary, topics discussed, decisions, action items, and participants."
-    )
-    source_desc = (
-        "the following per-section summaries of a transcript"
-        if from_summaries else "the following transcript"
-    )
-    user_msg = (
-        f"Generate a professional summary in Markdown from {source_desc}. "
-        f"The original file is named '{filename}'.\n\n"
-        f"CRITICAL: The content is in language '{lang}'. "
-        f"Write the ENTIRE output (including all section titles) in language '{lang}'. "
-        f"Do NOT use any other language.\n\n"
-        "IMPORTANT — tone and wording: Do NOT assume the recording is a 'meeting'. "
-        "It is often just a conversation or a call. Use neutral wording; adapt "
-        "naturally to what it actually is (e.g. 'this conversation', 'this call', "
-        "or 'this meeting' only if it clearly is a formal multi-person meeting). "
-        "Never start the summary with a phrase equivalent to 'In this meeting'.\n\n"
-        "Omit any section that does not apply (e.g. if there are no decisions or "
-        "action items, leave those sections out instead of writing placeholders).\n\n"
-        "Suggested format (translate ALL section titles to the required language; "
-        "adapt as needed):\n"
-        "# [Short descriptive title of the recording]\n\n"
-        "## Summary\n"
-        "2-3 paragraphs summarizing what was discussed.\n\n"
-        "## Participants\n"
-        "List of people who spoke (if speakers or names are identified). "
-        "If none are identified, omit this section.\n\n"
-        "## Topics Discussed\n"
-        "- Main topic 1\n"
-        "- ...\n\n"
-        "## Decisions and Agreements\n"
-        "- Decision/agreement 1 (omit the whole section if there are none)\n\n"
-        "## Action Items\n"
-        "| Owner | Action | Due Date (if mentioned) |\n"
-        "|-------|--------|-------------------------|\n"
-        "| ... | ... | ... |\n"
-        "(omit the whole section if there are none)\n\n"
-        "## Additional Key Points\n"
-        "- Relevant point 1\n"
-        "- ...\n\n"
-        "---\n"
-        f"Content:\n{content}"
-    )
-    return system_msg, user_msg
-
-
-def _build_minuta(content, filename, lang, model, from_summaries=False):
-    """REDUCE / pasada única con Groq: arma la minuta final en Markdown."""
-    system_msg, user_msg = _minuta_prompt(content, filename, lang, from_summaries)
-    return _groq_chat(
-        [{"role": "system", "content": system_msg},
-         {"role": "user", "content": user_msg}],
-        model=model, max_tokens=4096,
-    )
-
-
-# Gemini 2.5 Flash acepta 1M tokens de contexto: el transcript completo entra
-# en una sola llamada, sin necesidad de map-reduce.
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-)
-
-
-def _gemini_minuta(content, filename, lang):
-    """Arma la minuta en una sola llamada a Gemini (aprovecha el contexto de 1M)."""
-    if not GEMINI_API_KEY:
-        return None
-    system_msg, user_msg = _minuta_prompt(content, filename, lang)
-    headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
-    body = {
-        "system_instruction": {"parts": [{"text": system_msg}]},
-        "contents": [{"parts": [{"text": user_msg}]}],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 8192,
-            # Desactivar "thinking": la minuta es extracción, no razonamiento, y
-            # así garantizamos que el presupuesto de salida se use en la respuesta.
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
-    }
-    try:
-        res = requests.post(GEMINI_URL, headers=headers, json=body, timeout=180)
-        if res.status_code != 200:
-            log(f"{RED}❌ Gemini error {res.status_code}: {res.text[:200]}{RESET}")
-            return None
-        cands = res.json().get("candidates") or []
-        if not cands:
-            return None
-        parts = cands[0].get("content", {}).get("parts") or []
-        text = "".join(p.get("text", "") for p in parts).strip()
-        return text or None
-    except Exception as e:
-        log(f"{RED}❌ Gemini excepción: {e}{RESET}")
-        return None
-
-
-def generate_minuta(transcript_text, filename):
-    """Genera una minuta en Markdown desde el transcript.
-
-    Estrategia:
-    0) Si hay GEMINI_API_KEY: una sola llamada a Gemini (1M de contexto, sin
-       chunking). Si funciona, listo.
-    1) Fallback Groq map-reduce — MAP: parte el transcript en trozos y condensa
-       cada uno rotando modelos para repartir el cupo TPM del free tier.
-    2) REDUCE: junta los resúmenes y arma la minuta final; si siguen siendo
-       grandes, condensa de nuevo (reduce jerárquico).
-    Para transcripts cortos hace una sola pasada directa.
-    """
-    if not transcript_text.strip():
-        return None
-
-    if not GEMINI_API_KEY and not GROQ_API_KEY:
-        log(
-            f"{YELLOW}⚠️  Minuta omitida: no hay API key de Gemini ni de Groq. "
-            f"La transcripción no la necesita, pero la minuta sí — cargá una "
-            f"de las dos en la configuración.{RESET}"
-        )
-        return None
-
-    detected_lang = _detect_lang(transcript_text)
-
-    # 0) Gemini primero: el transcript completo entra en una sola llamada.
-    if GEMINI_API_KEY:
-        m = _gemini_minuta(transcript_text, filename, detected_lang)
-        if m:
-            return m
-        log(f"{YELLOW}⚠️  Gemini no disponible, caigo a Groq map-reduce.{RESET}")
-
-    if not GROQ_API_KEY:
-        return None
-
-    chunks = _chunk_text(transcript_text, MAP_CHUNK_CHARS)
-
-    if len(chunks) == 1:
-        # Cabe en una sola llamada: minuta directa.
-        return _build_minuta(transcript_text, filename, detected_lang, REDUCE_MODEL)
-
-    log(f"{YELLOW}🧩 Transcript largo: {len(chunks)} trozos, condensando…{RESET}")
-    merged = _map_condense(transcript_text, detected_lang)
-
-    # Si los resúmenes juntos siguen sin caber, condensarlos otra vez.
-    guard = 0
-    while len(merged) > MAP_CHUNK_CHARS and guard < 3:
-        log(f"{YELLOW}🔁 Resúmenes aún grandes ({len(merged)} chars), condensando de nuevo…{RESET}")
-        merged = _map_condense(merged, detected_lang)
-        guard += 1
-
-    return _build_minuta(merged, filename, detected_lang, REDUCE_MODEL, from_summaries=True)
-
-
 def process_file(file_path):
     """Procesa un audio.
 
     Devuelve (todos truthy salvo el fallo):
-      "ok"           → transcripción y minuta generadas
-      "ok_no_minuta" → transcripción lista pero la minuta no se pudo generar
+      "ok"           → transcripción generada
       "no_audio"     → el archivo no tiene pista de audio (se archiva sin más)
       False          → falló (el archivo NO se mueve a procesados)
     """
@@ -1156,14 +852,6 @@ def process_file(file_path):
             out_txt.write_text(txt_content, encoding="utf-8")
             out_json.write_text(json_content, encoding="utf-8")
             os.rename(file_path, PROCESSED_DIR / file_path.name)
-            PROGRESS.update(etapa="generando minuta")
-            minuta = generate_minuta(txt_content, file_path.name)
-            out_md = MINUTAS_DIR / f"{file_path.stem}.md"
-            if minuta:
-                out_md.write_text(minuta, encoding="utf-8")
-            else:
-                out_md.touch()
-                PROGRESS.warn("no se pudo generar la minuta (md vacío)")
             with open(LOG_FILE, "a") as log_f:
                 ts = time.strftime("%Y-%m-%d %H:%M:%S")
                 log_f.write(f"{file_path.name} | {ts}\n")
@@ -1171,8 +859,7 @@ def process_file(file_path):
                 f"{GREEN}✅ Transcripción completada (sin diarización).{RESET}\n"
                 f"   VTT  → {out_vtt.name}\n"
                 f"   TXT  → {out_txt.name}\n"
-                f"   JSON → {out_json.name}\n"
-                f"   MD   → {out_md.name} ({'con minuta' if minuta else 'vacío'})"
+                f"   JSON → {out_json.name}"
             )
         else:
             log(
@@ -1185,7 +872,7 @@ def process_file(file_path):
             f.unlink()
         temp_dir.rmdir()
         if overall_success:
-            return "ok" if minuta else "ok_no_minuta"
+            return "ok"
         return False
 
     # ------------------------------------------------------------------
@@ -1205,14 +892,6 @@ def process_file(file_path):
     out_json.write_text(json_content, encoding="utf-8")
 
     os.rename(file_path, PROCESSED_DIR / file_path.name)
-    PROGRESS.update(etapa="generando minuta")
-    minuta = generate_minuta(txt_content, file_path.name)
-    out_md = MINUTAS_DIR / f"{file_path.stem}.md"
-    if minuta:
-        out_md.write_text(minuta, encoding="utf-8")
-    else:
-        out_md.touch()
-        PROGRESS.warn("no se pudo generar la minuta (md vacío)")
     with open(LOG_FILE, "a") as log_f:
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         log_f.write(f"{file_path.name} | {ts}\n")
@@ -1221,15 +900,14 @@ def process_file(file_path):
         f"{GREEN}✅ Transcripción con diarización completada.{RESET}\n"
         f"   VTT  → {out_vtt.name}\n"
         f"   TXT  → {out_txt.name}\n"
-        f"   JSON → {out_json.name}\n"
-        f"   MD   → {out_md.name} ({'con minuta' if minuta else 'vacío'})"
+        f"   JSON → {out_json.name}"
     )
 
     # Limpieza
     for f in segments:
         f.unlink()
     temp_dir.rmdir()
-    return "ok" if minuta else "ok_no_minuta"
+    return "ok"
 
 
 # --- Helpers compartidos por el modo cron (cli) y el watcher (GUI) ------------
@@ -1264,7 +942,7 @@ def pending_files():
 def run_one(file_path):
     """Procesa un archivo manejando el registro de progreso.
 
-    Devuelve lo mismo que process_file: "ok", "ok_no_minuta" o False.
+    Devuelve lo mismo que process_file: "ok", "no_audio" o False.
     """
     PROGRESS.start(file_path.name)
     try:

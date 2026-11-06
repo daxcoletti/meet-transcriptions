@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=Meet Transcriptions
-Comment=Automatic meeting transcription with minutes
-Comment[es]=Transcripción automática de reuniones con minuta
+Comment=Automatic meeting transcription and screen recording
+Comment[es]=Transcripción automática de reuniones y grabación de pantalla
 Exec=meet-transcriptions
 Icon=meet-transcriptions
 Terminal=false

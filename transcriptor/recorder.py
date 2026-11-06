@@ -1,9 +1,10 @@
 """Grabación de pantalla integrada (fase 1a+1b: Windows y Linux/X11).
 
 Diseño:
-- Resolución y FPS moderados: suficiente fluidez para volver a ver la
-  reunión sin que se entrecorte, manteniendo archivos chicos y poca CPU
-  (el contenido es casi estático y x264 comprime muy bien frames repetidos).
+- Resolución y FPS bajos a propósito: la grabación corre en paralelo a la
+  reunión (videollamada, navegador) y no debe competirle CPU. El contenido
+  es casi estático (slides, pantallas compartidas), así que pocos fps
+  alcanzan para verlo después o pasarlo por una IA.
 - Contenedor MKV: si la app muere a mitad de una grabación larga, el archivo
   queda reproducible hasta el corte (un MP4 sin finalizar es basura).
 - Se graba en un staging (<carpeta vigilada>/.grabando/) y se mueve a la
@@ -34,15 +35,23 @@ from pathlib import Path
 from . import ffmpeg_utils
 
 # calidad → (alto de video, fps)
-# 10 fps es el piso para que la reproducción no se sienta entrecortada;
-# menos de eso servía para identificar pantallas pero no para volver a ver
-# la reunión. El costo en disco/CPU sigue siendo bajo: el contenido es casi
-# estático y x264 con -tune stillimage comprime muy bien los frames repetidos.
+# Prioridad: no cargar la máquina durante la reunión. 720p mantiene legible
+# el texto de slides y pantallas compartidas (480p no, y eso importa si el
+# video se analiza con una IA); los fps son lo que más CPU cuesta. Los
+# modelos multimodales muestrean el video a ~1 fps, así que 5 fps sobran
+# para análisis; 10 fps para volver a verlo con fluidez razonable.
 QUALITY = {
-    "low": (480, 10),
-    "medium": (720, 15),
-    "high": (1080, 30),
+    "low": (720, 5),
+    "medium": (720, 10),
+    "high": (1080, 15),
 }
+
+# x264: "ultrafast" usa bastante menos CPU que "veryfast" a cambio de
+# archivos algo más grandes — buen trato con contenido casi estático.
+X264_ARGS = [
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+    "-tune", "stillimage", "-pix_fmt", "yuv420p",
+]
 
 STAGING_DIRNAME = ".grabando"
 
@@ -480,7 +489,7 @@ class ScreenRecorder:
             else:
                 self.log("⚠️  No pude detectar el monitor de audio del sistema (pactl); grabo sin él.")
 
-        vf = f"[0:v]scale=-2:{height}[v]"
+        vf = f"[0:v]scale=-2:{height}:flags=fast_bilinear[v]"
         cmd += ["-filter_complex"]
         if audio_inputs == 2:
             cmd += [f"{vf};[1:a]aresample=48000[a1];[2:a]aresample=48000[a2];"
@@ -492,10 +501,7 @@ class ScreenRecorder:
         else:
             cmd += [vf]
             maps = ["-map", "[v]"]
-        cmd += maps + [
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "30",
-            "-tune", "stillimage", "-pix_fmt", "yuv420p",
-        ]
+        cmd += maps + X264_ARGS
         if audio_inputs:
             cmd += ["-c:a", "aac", "-b:a", "128k"]
         cmd += [str(self._video_path)]
@@ -505,9 +511,8 @@ class ScreenRecorder:
         return [
             ffmpeg, "-y", "-hide_banner", "-nostats", "-loglevel", "warning",
             "-f", "gdigrab", "-framerate", str(fps), "-i", "desktop",
-            "-vf", f"scale=-2:{height}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "30",
-            "-tune", "stillimage", "-pix_fmt", "yuv420p",
+            "-vf", f"scale=-2:{height}:flags=fast_bilinear",
+            *X264_ARGS,
             str(self._video_path),
         ]
 
