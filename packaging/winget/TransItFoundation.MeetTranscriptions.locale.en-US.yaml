@@ -10,14 +10,14 @@ PackageUrl: https://github.com/daxcoletti/meet-transcriptions
 License: GPL-3.0-or-later
 LicenseUrl: https://github.com/daxcoletti/meet-transcriptions/blob/main/LICENSE
 Copyright: TRANS-IT Foundation
-ShortDescription: Automatic meeting transcription with speaker diarization and AI minutes, rotating free API tiers.
+ShortDescription: Automatic meeting transcription with speaker diarization and screen recording, rotating free API tiers.
 Description: |-
   Meet Transcriptions watches a recordings folder and, for every new audio or
   video file, automatically generates a speaker-diarized transcript (VTT, TXT,
-  JSON) and AI-written meeting minutes in Markdown. It rotates across the free
-  tiers of several transcription APIs (Deepgram, Gladia, AssemblyAI,
-  ElevenLabs, Speechmatics, Groq) to dodge individual quota limits; minutes
-  are generated with Google Gemini or Groq. Lives in the system tray, detects
+  JSON). It rotates across the free tiers of several transcription APIs
+  (Deepgram, Gladia, AssemblyAI, ElevenLabs, Speechmatics, Groq) to dodge
+  individual quota limits. It can also record the screen with microphone and
+  system audio, using little CPU. Lives in the system tray, detects
   new recordings via native filesystem events, and includes a first-run wizard
   that checks/downloads ffmpeg and validates the API keys. Bilingual UI
   (English/Spanish).
@@ -26,7 +26,7 @@ Tags:
   - transcription
   - speech-to-text
   - diarization
-  - meeting-minutes
+  - screen-recording
   - whisper
   - meetings
 ReleaseNotesUrl: https://github.com/daxcoletti/meet-transcriptions/releases/tag/v2.3.2

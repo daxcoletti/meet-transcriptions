@@ -6,14 +6,14 @@ Publisher: TRANS-IT Foundation
 PackageName: Meet Transcriptions
 PackageUrl: https://github.com/daxcoletti/meet-transcriptions
 License: GPL-3.0-or-later
-ShortDescription: Transcripción automática de reuniones con diarización y minuta con IA, rotando APIs gratuitas.
+ShortDescription: Transcripción automática de reuniones con diarización y grabación de pantalla, rotando APIs gratuitas.
 Description: |-
   Meet Transcriptions vigila una carpeta de grabaciones y, por cada audio o
   video nuevo, genera automáticamente la transcripción con identificación de
-  hablantes (VTT, TXT, JSON) y una minuta en Markdown escrita con IA. Rota
-  entre los planes gratuitos de varios servicios de transcripción (Deepgram,
-  Gladia, AssemblyAI, ElevenLabs, Speechmatics, Groq) para esquivar los
-  límites de cuota; la minuta se genera con Google Gemini o Groq. Vive en la
+  hablantes (VTT, TXT, JSON). Rota entre los planes gratuitos de varios
+  servicios de transcripción (Deepgram, Gladia, AssemblyAI, ElevenLabs,
+  Speechmatics, Groq) para esquivar los límites de cuota. También graba la
+  pantalla con el micrófono y el audio del sistema, con poco consumo. Vive en la
   bandeja del sistema, detecta grabaciones nuevas con eventos nativos del
   sistema de archivos e incluye un asistente de primera ejecución que
   verifica/descarga ffmpeg y valida las API keys. Interfaz bilingüe
@@ -21,6 +21,6 @@ Description: |-
 Tags:
   - transcripcion
   - reuniones
-  - minuta
+  - grabacion-de-pantalla
 ManifestType: locale
 ManifestVersion: 1.6.0
