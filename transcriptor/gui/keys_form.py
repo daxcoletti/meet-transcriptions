@@ -25,6 +25,10 @@ TRANSCRIPTION_META = [
     ("elevenlabs", "ElevenLabs", "https://elevenlabs.io/app/settings/api-keys"),
     ("speechmatics", "Speechmatics", "https://portal.speechmatics.com/"),
     ("groq", "Groq", "https://console.groq.com/keys"),
+    ("cloudflare", "Cloudflare Workers AI",
+     "https://dash.cloudflare.com/?to=/:account/ai/workers-ai"),
+    ("cloudflare_account", "Cloudflare Account ID",
+     "https://dash.cloudflare.com/?to=/:account/ai/workers-ai"),
 ]
 
 

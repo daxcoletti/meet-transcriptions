@@ -8,6 +8,7 @@ Es el corazón del viejo `super_transcriptor_v2.py`, ahora multiplataforma:
 - salida por `log()` redirigible (la GUI la captura con un callback).
 """
 
+import base64
 import json
 import os
 import re
@@ -124,6 +125,8 @@ PROGRESS_DIR = None
 LOG_FILE = None
 
 GROQ_API_KEY = None
+CLOUDFLARE_API_KEY = None
+CLOUDFLARE_ACCOUNT_ID = None
 GLADIA_API_KEY = None
 DEEPGRAM_API_KEY = None
 ASSEMBLYAI_API_KEY = None
@@ -140,7 +143,7 @@ def configure(cfg):
     """Inyecta la configuración (rutas + keys) y resuelve ffmpeg."""
     global CFG, AUDIOS_DIR, TRANSCRIPTIONS_DIR, PROCESSED_DIR
     global PROGRESS_DIR, LOG_FILE
-    global GROQ_API_KEY, GLADIA_API_KEY, DEEPGRAM_API_KEY, ASSEMBLYAI_API_KEY
+    global GROQ_API_KEY, CLOUDFLARE_API_KEY, CLOUDFLARE_ACCOUNT_ID, GLADIA_API_KEY, DEEPGRAM_API_KEY, ASSEMBLYAI_API_KEY
     global ELEVENLABS_API_KEY, SPEECHMATICS_API_KEY
     global SPEECHMATICS_LANG, FFMPEG
 
@@ -152,6 +155,8 @@ def configure(cfg):
     LOG_FILE = cfg.log_file
 
     GROQ_API_KEY = cfg.get_key("groq")
+    CLOUDFLARE_API_KEY = cfg.get_key("cloudflare")
+    CLOUDFLARE_ACCOUNT_ID = cfg.get_key(config_mod.CLOUDFLARE_ACCOUNT)
     GLADIA_API_KEY = cfg.get_key("gladia")
     DEEPGRAM_API_KEY = cfg.get_key("deepgram")
     ASSEMBLYAI_API_KEY = cfg.get_key("assemblyai")
@@ -303,6 +308,9 @@ def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
                 if res.status_code == 429:
                     return "RATE_LIMIT"
                 return res.json().get("text") if res.status_code == 200 else None
+
+        elif provider == "cloudflare":
+            return _transcribe_cloudflare(file_path)
 
         elif provider == "gladia":
             headers = {"x-gladia-key": GLADIA_API_KEY}
@@ -634,6 +642,41 @@ def transcribe_with_provider(file_path, provider, diarize=False, offset_sec=0):
     return None
 
 
+def _transcribe_cloudflare(file_path):
+    """Whisper large v3 turbo en Cloudflare Workers AI (sin diarización).
+
+    Plan gratis: 10.000 neurons por día (~214 min de audio, se renuevan a las
+    00:00 UTC). Pasado eso responde el error 4006 y no cobra: se toma como
+    límite y se sigue con el próximo proveedor. El segmento se pasa a mono
+    16 kHz / 48 kbps (Whisper no necesita más) para que el pedido, que va en
+    base64 dentro de un JSON, pese ~5 MB en vez de ~20.
+    """
+    with tempfile.TemporaryDirectory(prefix="cf_") as tmp:
+        liviano = Path(tmp) / "audio.mp3"
+        proc = subprocess.run(
+            [FFMPEG, "-i", str(file_path), "-vn", "-ac", "1", "-ar", "16000",
+             "-c:a", "libmp3lame", "-b:a", "48k", str(liviano), "-y"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            env=ffmpeg_utils.subprocess_env(),
+            **ffmpeg_utils.SUBPROCESS_FLAGS,
+        )
+        if proc.returncode != 0:
+            return None
+        audio = base64.b64encode(liviano.read_bytes()).decode()
+    res = requests.post(
+        f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}"
+        "/ai/run/@cf/openai/whisper-large-v3-turbo",
+        headers={"Authorization": f"Bearer {CLOUDFLARE_API_KEY}"},
+        json={"audio": audio},
+        timeout=300,
+    )
+    if res.status_code == 429 or "4006" in res.text or "free allocation" in res.text.lower():
+        return "RATE_LIMIT"
+    if res.status_code != 200:
+        return None
+    return ((res.json().get("result") or {}).get("text") or "").strip() or None
+
+
 def fmt_vtt_time(seconds):
     """Convierte segundos a formato WebVTT: hh:mm:ss.mmm"""
     h = int(seconds // 3600)
@@ -739,6 +782,7 @@ def process_file(file_path):
 
     providers = [
         ("groq", GROQ_API_KEY),
+        ("cloudflare", CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID),
         ("gladia", GLADIA_API_KEY),
         ("deepgram", DEEPGRAM_API_KEY),
         ("assemblyai", ASSEMBLYAI_API_KEY),

@@ -196,6 +196,14 @@ STRINGS = {
     "prov.elevenlabs": {"es": "Transcripción + diarización (Scribe)", "en": "Transcription + diarization (Scribe)"},
     "prov.speechmatics": {"es": "Transcripción + diarización", "en": "Transcription + diarization"},
     "prov.groq": {"es": "Transcripción Whisper (sin diarización)", "en": "Whisper transcription (no diarization)"},
+    "prov.cloudflare": {
+        "es": "Whisper (sin diarización); token de \"Use REST API\"",
+        "en": "Whisper (no diarization); token from \"Use REST API\"",
+    },
+    "prov.cloudflare_account": {
+        "es": "Va junto con el token de Cloudflare",
+        "en": "Goes together with the Cloudflare token",
+    },
     "keys.placeholder": {"es": "(sin configurar)", "en": "(not set)"},
     "keys.toggle_tip": {"es": "Mostrar/ocultar la key", "en": "Show/hide the key"},
     "keys.test": {"es": "Probar", "en": "Test"},

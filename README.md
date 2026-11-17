@@ -67,7 +67,7 @@ super_transcriptor_v2.py wrapper de compatibilidad para el cron existente
 1. Escanea un directorio de audios (`/home/dax/Audios` por defecto).
 2. Por cada archivo nuevo, extrae el audio con `ffmpeg` y lo divide en segmentos de 10 minutos (límite típico de las APIs gratuitas).
 3. **Transcripción con diarización**: intenta cada segmento con **Deepgram** (`nova-3`) y, si falla, **Gladia**, luego **AssemblyAI**, **ElevenLabs** (Scribe) y **Speechmatics**. Devuelve *utterances* con hablante y timestamps.
-4. **Fallback sin diarización**: si ningún proveedor de diarización está disponible o falla, cae a texto plano probando en orden **Groq** (`whisper-large-v3`) → **Gladia** → **Deepgram** → **AssemblyAI** → **ElevenLabs** → **Speechmatics**. Ante un `429 (rate limit)` salta al siguiente.
+4. **Fallback sin diarización**: si ningún proveedor de diarización está disponible o falla, cae a texto plano probando en orden **Groq** (`whisper-large-v3`) → **Cloudflare Workers AI** (`whisper-large-v3-turbo`; necesita también el Account ID, `"cloudflare_account"` en `api_keys`; ~214 min gratis por día) → **Gladia** → **Deepgram** → **AssemblyAI** → **ElevenLabs** → **Speechmatics**. Ante un `429 (rate limit)` salta al siguiente.
 5. Une los segmentos y escribe la salida en `transcriptions/`:
    - `.vtt` (WebVTT, con hablantes si hubo diarización)
    - `.txt` (texto plano con timestamps)

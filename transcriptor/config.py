@@ -32,8 +32,10 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 
 # Orden de fallback para transcripción sin diarización.
 TRANSCRIPTION_PROVIDERS = [
-    "groq", "gladia", "deepgram", "assemblyai", "elevenlabs", "speechmatics",
+    "groq", "cloudflare", "gladia", "deepgram", "assemblyai", "elevenlabs", "speechmatics",
 ]
+# Cloudflare necesita, además del token, el Account ID (va en api_keys aparte).
+CLOUDFLARE_ACCOUNT = "cloudflare_account"
 # Proveedores que soportan diarización, en orden de preferencia.
 DIARIZATION_PROVIDERS = [
     "deepgram", "gladia", "assemblyai", "elevenlabs", "speechmatics",
@@ -107,7 +109,10 @@ class Config:
         return self.data.get("ffmpeg_path", "")
 
     def has_transcription_key(self):
-        return any(self.get_key(p) for p in TRANSCRIPTION_PROVIDERS)
+        return any(
+            self.get_key(p) and (p != "cloudflare" or self.get_key(CLOUDFLARE_ACCOUNT))
+            for p in TRANSCRIPTION_PROVIDERS
+        )
 
     def ensure_dirs(self):
         for d in [self.audios_dir, self.transcriptions_dir,

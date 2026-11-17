@@ -15,6 +15,10 @@ _CHECKS = {
         "https://api.groq.com/openai/v1/models",
         headers={"Authorization": f"Bearer {k}"}, timeout=15,
     ),
+    "cloudflare": lambda k: requests.get(
+        "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        headers={"Authorization": f"Bearer {k}"}, timeout=15,
+    ),
     "gladia": lambda k: requests.get(
         "https://api.gladia.io/v2/pre-recorded?limit=1",
         headers={"x-gladia-key": k}, timeout=15,
